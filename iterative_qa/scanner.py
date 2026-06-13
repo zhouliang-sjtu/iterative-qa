@@ -4,7 +4,7 @@ import os
 import re
 from typing import Dict, List, Any
 
-from .core import ProjectProfile
+from .models import ProjectProfile
 
 
 class ProjectScanner:

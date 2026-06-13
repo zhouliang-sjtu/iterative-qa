@@ -5,18 +5,15 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-
 setup(
     name="iterative-qa",
     version="3.0.0",
-    author="您的姓名",
-    author_email="your@email.com",
-    description="AI驱动的智能多视角质量校验引擎",
+    author="周良",
+    author_email="zhouliang@shsmu.edu.cn",
+    description="AI驱动的智能多视角质量校验引擎 - 通过大模型分析项目特征，动态识别最优验证视角",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/your-org/iterative-qa",
+    url="https://github.com/zhouliang-sjtu/iterative-qa",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -31,7 +28,6 @@ setup(
         "Topic :: Software Development :: Testing",
     ],
     python_requires=">=3.10",
-    install_requires=requirements,
     entry_points={
         "console_scripts": [
             "iterative-qa=iterative_qa.cli:main",

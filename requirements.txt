@@ -5,6 +5,7 @@ python>=3.10
 requests>=2.31.0
 aiohttp>=3.9.0
 pydantic>=2.7.0
+python-dotenv>=1.0.0
 
 # 代码分析
 mypy>=1.10.0
@@ -17,9 +18,32 @@ numpy>=1.26.4
 # 异步支持
 asyncio>=3.4.3
 
-# LLM集成
-openai>=1.13.0
+# LLM集成 - 主框架
 langchain>=0.1.10
+langchain-openai>=0.1.0
+langchain-core>=0.1.0
+
+# OpenAI
+openai>=1.13.0
+
+# Anthropic (可选)
+# anthropic>=0.20.0
+
+# Google (可选)
+# google-generativeai>=0.3.0
+
+# 百度文心一言 (可选)
+# qianfan>=0.1.0
+
+# 阿里云通义千问 (可选)
+# dashscope>=1.0.0
+
+# 智谱 AI (可选)
+# zhipuai>=2.0.0
+
+# Hugging Face (可选)
+# transformers>=4.37.0
+# torch>=2.1.0
 
 # 测试
 pytest>=8.2.0

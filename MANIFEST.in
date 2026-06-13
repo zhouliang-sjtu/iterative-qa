@@ -1,0 +1,21 @@
+# 包含配置文件
+include iterative_qa.yaml
+include .env.example
+
+# 包含文档
+include README.md
+include SKILL.md
+include skill.yaml
+
+# 包含许可证
+include LICENSE
+
+# 包含测试文件
+recursive-include tests *.py
+
+# 排除不需要的文件
+exclude .gitignore
+exclude .git/*
+exclude __pycache__/*
+exclude *.pyc
+exclude *.pyo

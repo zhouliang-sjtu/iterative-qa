@@ -1,17 +1,51 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 *.egg-info/
 venv/
 .venv/
+.env/
+.tox/
+.pytest_cache/
+.cache/
+nosetests.xml
+coverage.xml
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # Coverage
 htmlcov/
 .coverage
+.coverage.*
 
 # Output
 outputs/
+dist/
+build/
+*.log
+*.log.*
+
+# Sensitive files
+.env
+.env.local
+.env.*.local
+.env.example.local
+secrets.json
+credentials.json
+config/local.*
+*.key
+*.pem
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db

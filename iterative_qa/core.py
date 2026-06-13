@@ -1,88 +1,25 @@
 """核心服务类 - 提供完整的质量校验流程"""
 
 import os
-import json
 from typing import Dict, List, Any, Optional
-from datetime import datetime, UTC
-from dataclasses import dataclass, field
 
+from .models import ValidationResult, RoundResult, ProjectProfile
 from .scanner import ProjectScanner
 from .perspectives import PerspectiveRegistry
-
-
-@dataclass
-class ValidationResult:
-    """验证结果"""
-    check_name: str
-    status: str  # passed, failed, warning
-    message: str
-    severity: str  # critical, high, medium, low
-    remediation: Optional[str] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "check_name": self.check_name,
-            "status": self.status,
-            "message": self.message,
-            "severity": self.severity,
-            "remediation": self.remediation,
-        }
-
-
-@dataclass
-class RoundResult:
-    """单轮校验结果"""
-    round_number: int
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    issues_found: List[ValidationResult] = field(default_factory=list)
-    issues_fixed: int = 0
-    status: str = "pending"
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "round_number": self.round_number,
-            "timestamp": self.timestamp.isoformat(),
-            "issues_found": [r.to_dict() for r in self.issues_found],
-            "issues_fixed": self.issues_fixed,
-            "status": self.status,
-        }
-
-
-@dataclass
-class ProjectProfile:
-    """项目特征分析结果"""
-    project_type: str
-    tech_stack: List[str]
-    complexity: str  # low, medium, high
-    scale: str       # small, medium, large, enterprise
-    domain: str      # 业务领域
-    security_requirements: int  # 0-10
-    file_count: int
-    lines_of_code: int
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "project_type": self.project_type,
-            "tech_stack": self.tech_stack,
-            "complexity": self.complexity,
-            "scale": self.scale,
-            "domain": self.domain,
-            "security_requirements": self.security_requirements,
-            "file_count": self.file_count,
-            "lines_of_code": self.lines_of_code,
-        }
+from .llm_service import get_llm_service, LLMService
 
 
 class QAService:
     """智能质量校验服务"""
     
-    def __init__(self, project_path: str = ".", config: Optional[Dict] = None):
+    def __init__(self, project_path: str = ".", config: Optional[Dict] = None, llm_service: Optional[LLMService] = None):
         self.project_path = project_path
         self.config = config or {}
         self.scanner = ProjectScanner()
         self.registry = PerspectiveRegistry()
         self.round_results: List[RoundResult] = []
         self.project_profile: Optional[ProjectProfile] = None
+        self.llm_service = llm_service or get_llm_service()
         
         # 初始化内置视角专家
         self._init_default_experts()
@@ -184,11 +121,36 @@ class QAService:
         
         return not (has_p0_p1 or has_p2)
     
-    def generate_report(self) -> str:
-        """生成质量报告"""
+    def generate_report(self, use_llm: bool = True) -> str:
+        """生成质量报告
+        
+        Args:
+            use_llm: 是否使用大模型生成智能报告
+        
+        Returns:
+            格式化的质量报告
+        """
         if not self.project_profile:
             return "请先执行项目分析"
         
+        # 收集所有验证结果
+        all_issues = []
+        for round_result in self.round_results:
+            for issue in round_result.issues_found:
+                all_issues.append(issue.to_dict())
+        
+        # 如果有大模型服务且启用，使用大模型生成智能报告
+        if use_llm and self.llm_service:
+            try:
+                return self.llm_service.generate_report(
+                    validation_results=all_issues,
+                    project_profile=self.project_profile.to_dict()
+                )
+            except Exception as e:
+                # 如果大模型调用失败，回退到普通报告
+                pass
+        
+        # 回退到普通报告生成
         report = []
         report.append("# 质量校验报告")
         report.append(f"\n**项目名称**: {os.path.basename(self.project_path)}")
@@ -215,6 +177,20 @@ class QAService:
                     report.append(f"- 修复建议: {issue.remediation}")
         
         return "\n".join(report)
+    
+    def analyze_with_llm(self) -> Dict[str, Any]:
+        """使用大模型分析项目特征
+        
+        Returns:
+            大模型分析结果
+        """
+        if not self.project_profile:
+            self.analyze_project()
+        
+        if not self.llm_service:
+            return {"error": "未配置大模型服务"}
+        
+        return self.llm_service.analyze_project(self.project_profile.to_dict())
     
     def register_expert(self, expert_class):
         """注册自定义视角专家"""

@@ -5,7 +5,7 @@
 核心特性：
 - 智能项目扫描：自动分析项目结构、技术栈、规模和业务领域
 - 大模型视角识别：基于项目特征动态推荐最合适的质量校验视角组合
-- 动态专家系统：10+种视角专家，自动适配不同项目类型
+- 动态专家系统：11种视角专家，自动适配不同项目类型
 - 四阶段分层扫描：环境基线→静态分析→运行时验证→集成验证
 - 智能问题分类：自动分类问题等级和类型，提供修复建议
 - 质量报告生成：大模型驱动的专业质量报告自动生成
@@ -24,6 +24,8 @@ __organization__ = "上海交通大学医学院"
 
 from .core import QAService
 from .scanner import ProjectScanner
+from .models import ValidationResult, RoundResult, ProjectProfile
+from .llm_service import LLMService, create_llm_service, get_llm_service
 from .cli import main as cli_main
 from .perspectives import (
     BasePerspectiveExpert,
@@ -43,6 +45,12 @@ from .perspectives import (
 __all__ = [
     "QAService",
     "ProjectScanner",
+    "ValidationResult",
+    "RoundResult",
+    "ProjectProfile",
+    "LLMService",
+    "create_llm_service",
+    "get_llm_service",
     "cli_main",
     "BasePerspectiveExpert",
     "DeveloperExpert",
