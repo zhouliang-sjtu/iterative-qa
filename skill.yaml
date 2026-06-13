@@ -54,15 +54,12 @@ requirements:
 
 # 定价模型
 pricing:
-  - name: "免费版"
-    description: "基础质量校验，支持单个项目"
-    price: "免费"
-  - name: "专业版"
-    description: "高级分析功能，支持多个项目"
-    price: "¥99/月"
-  - name: "企业版"
-    description: "定制化服务，私有化部署"
-    price: "联系销售"
+  type: "free"
+  note: "完全免费使用，欢迎捐赠支持"
+  donation:
+    wechat: "赞赏码（扫码支持）"
+    alipay: "赞赏码（扫码支持）"
+    github_sponsors: "https://github.com/sponsors/zhouliang-sjtu"
 
 # 服务条款
 terms:

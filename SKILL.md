@@ -48,11 +48,11 @@ tags:
 ### 安装方式
 
 ```bash
-# 方式1: pip安装（推荐）
-pip install iterative-qa
+# 方式1: pip安装（GitHub Releases，推荐）
+pip install https://github.com/zhouliang-sjtu/iterative-qa/releases/download/v3.0.0/iterative_qa-3.0.0-py3-none-any.whl
 
 # 方式2: 源码安装
-git clone https://github.com/shsmu-zhouliang/iterative-qa.git
+git clone https://github.com/zhouliang-sjtu/iterative-qa.git
 cd iterative-qa
 pip install -e .
 ```
@@ -225,13 +225,12 @@ qa_service.register_expert("my_custom", MyCustomExpert)
 
 ---
 
-## 💰 定价方案
+## 💰 免费 + 捐赠
 
-| 版本 | 价格 | 功能 |
-|------|------|------|
-| **免费版** | 免费 | 基础质量校验，支持单个项目 |
-| **专业版** | ¥99/月 | 高级分析功能，支持多个项目 |
-| **企业版** | 联系销售 | 定制化服务，私有化部署 |
+iterative-qa 完全免费使用。如果这个工具对你有帮助，欢迎通过以下方式支持：
+
+- **微信赞赏码** / **支付宝赞赏码** — 扫码支持
+- **GitHub Sponsors** — https://github.com/sponsors/zhouliang-sjtu
 
 ---
 
