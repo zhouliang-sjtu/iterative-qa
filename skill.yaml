@@ -1,6 +1,6 @@
 name: "iterative-qa"
-version: "3.0.0"
-description: "AI驱动的智能多视角质量校验引擎 - 通过大模型分析项目特征，动态识别最优验证视角，实现精准的多维度质量审计与工程优化"
+version: "4.0.0"
+description: "AI驱动的智能多视角质量校验引擎 — 26位视角专家全量扫描 + CI门禁 + 风险评分 + 增量diff + 基线对比"
 author:
   name: "周良"
   email: "zhouliang@shsmu.edu.cn"
@@ -12,9 +12,11 @@ tags:
   - "工程优化"
   - "多视角分析"
   - "AI辅助开发"
-  - "调试工具"
   - "CI/CD"
   - "质量保证"
+  - "安全审计"
+  - "隐私合规"
+  - "医疗信息化"
 
 # 技能入口配置
 entry:
@@ -23,33 +25,36 @@ entry:
 
 # 功能特性
 features:
-  - name: "智能项目扫描"
-    description: "自动分析项目结构、技术栈、规模和业务领域"
-  - name: "大模型视角识别"
-    description: "基于项目特征动态推荐最合适的质量校验视角组合"
-  - name: "动态专家系统"
-    description: "10+种视角专家，自动适配不同项目类型"
-  - name: "四阶段分层扫描"
-    description: "环境基线→静态分析→运行时验证→集成验证"
-  - name: "智能问题分类"
-    description: "自动分类问题等级和类型，提供修复建议"
-  - name: "质量报告生成"
-    description: "大模型驱动的专业质量报告自动生成"
+  - name: "26位视角专家全量扫描"
+    description: "代码到生产的全链路覆盖：编写→测试→审查→安全→ETL→PHI→部署→可观测性"
+  - name: "CI/CD 门禁模式"
+    description: "critical=0 / high≤5 / medium≤30 阈值门禁，exit_code 自动判定"
+  - name: "项目风险评分引擎"
+    description: "加权评分 + 归一化风险等级 + top-N 风险项排序"
+  - name: "增量 QA 扫描"
+    description: "git diff 变更文件/行级扫描，pre-commit / PR 检查可用"
+  - name: "基线对比追踪"
+    description: "保存基线，追踪改善/恶化趋势，量化 QA 效果"
+  - name: "迭代收敛机制"
+    description: "指纹追踪多轮运行，自动判定收敛并输出最终报告"
+  - name: "大模型报告生成"
+    description: "7 家大模型提供商适配，自动生成专业质量报告"
+  - name: "医疗领域专项支持"
+    description: "PHI 隐私扫描、医学数据校验、HIPAA 合规、ETL 完整性"
 
 # 支持的项目类型
 supported_projects:
   - "Web应用"
   - "移动应用"
   - "桌面应用"
+  - "后端服务"
   - "数据工程"
   - "AI/ML项目"
-  - "嵌入式系统"
-  - "后端服务"
+  - "医疗信息系统"
 
 # 技术栈要求
 requirements:
   - "Python 3.10+"
-  - "Node.js 18+"
   - "Git"
 
 # 定价模型
@@ -75,6 +80,7 @@ compatibility:
   frameworks:
     - "FastAPI"
     - "Django"
+    - "Flask"
     - "React"
     - "Vue"
     - "TypeScript"

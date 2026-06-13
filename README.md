@@ -1,54 +1,63 @@
 <p align="center">
   <h1 align="center">iterative-qa</h1>
-  <p align="center"><strong>AI 驱动的智能质量校验引擎</strong></p>
+  <p align="center"><strong>AI 驱动的智能质量校验引擎 — 26位专家 × 5种能力 × 全链路覆盖</strong></p>
   <p align="center">
-    <img src="https://img.shields.io/badge/version-3.0.0-blue" alt="Version">
+    <img src="https://img.shields.io/badge/version-4.0.0-blue" alt="Version">
     <img src="https://img.shields.io/badge/python-3.10+-green" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="License">
     <img src="https://img.shields.io/badge/status-production-success" alt="Status">
+    <img src="https://img.shields.io/badge/experts-26-orange" alt="Experts">
   </p>
   <p align="center">
-    让 11 位 AI 专家多视角审视你的项目 &nbsp;·&nbsp; 大模型驱动 &nbsp;·&nbsp; 即插即用
+    26 位 AI 专家全量扫描 · CI 门禁 · 风险评分 · 增量 diff · 基线对比
   </p>
 </p>
 
 ---
 
-## 💡 一句话介绍
+## 一句话介绍
 
-> 不是又一个 Linter。**iterative-qa** 像一支虚拟的 QA 团队——让 11 位 AI 视角专家围绕你的项目展开多轮交叉审查，直到所有问题收敛。
+> 不是又一个 Linter。**iterative-qa** 像一支虚拟的 QA 团队——让 26 位 AI 视角专家围绕你的项目展开多轮交叉审查，直到所有问题收敛，再输出可执行的质量报告和风险评分。
 
 ---
 
-## 🎯 解决什么痛点？
+## 解决什么痛点？
 
 | 传统质量检查 | iterative-qa |
 |---|---|
-| 单一视角（Linter / 单测覆盖） | 11 种视角专家联合审查 |
-| 规则死板，配置繁琐 | AI 动态适配项目特征 |
+| 单一视角（Linter / 单测覆盖） | 26 种视角专家全量联合审查 |
+| 规则死板，配置繁琐 | AI 动态适配项目特征，默认全量运行 |
 | 只报错，不给修复路径 | 每一条 issue 附带 remediation |
 | 一次扫完就结束 | **迭代收敛**——跑多轮直到无新问题 |
-| 通用工具，不懂你的行业 | 内置医疗/金融/合规等领域专项 |
+| 不能做 CI 拦截 | `--ci` 出口码 + JSON，直接嵌入 GitHub Actions |
+| 没法量化质量变化 | `--baseline` 保存快照，`--baseline-diff` 对比趋势 |
+| 通用工具，不懂你的行业 | 内置 PHI 隐私 / 医学校验 / HIPAA 等医疗领域专项 |
 
-**核心逻辑**：扫描项目 → AI 推荐视角组合 → 多轮交互验证 → 问题收敛 → 输出可执行的质量报告。
+**核心逻辑**：扫描项目 → 26 位专家全量运行 → 风险评分 + CI 门禁判定 → 迭代收敛 → 输出报告。
 
 ---
 
-## 🚀 30 秒上手
+## 30 秒上手
 
 ```bash
 # 安装
-pip install https://github.com/zhouliang-sjtu/iterative-qa/releases/download/v3.0.0/iterative_qa-3.0.0-py3-none-any.whl
+pip install https://github.com/zhouliang-sjtu/iterative-qa/releases/download/v4.0.0/iterative_qa-4.0.0-py3-none-any.whl
 
-# 一行分析项目
-iterative-qa --analyze
+# 一行全量扫描（26 位专家全部运行）
+iterative-qa
 
-# 一键执行完整质量校验
+# CI 门禁
+iterative-qa --ci --json
+
+# 增量扫描
+iterative-qa --diff
+
+# 完整收敛周期
 iterative-qa --full-cycle --report --output report.md
 ```
 
 <details>
-<summary>📦 源码安装</summary>
+<summary> 源码安装</summary>
 
 ```bash
 git clone https://github.com/zhouliang-sjtu/iterative-qa.git
@@ -59,40 +68,46 @@ pip install -e .
 
 ---
 
-## 🧠 核心能力
+## 核心能力
 
-### 11 位视角专家联合审查
+### 26 位视角专家（全量运行）
 
-| 专家 | 关注点 | 自动激活条件 |
-|---|---|---|
-| **Developer** | 编译/类型/架构 | 所有项目 |
-| **User** | 交互体验/可访问性 | Web/Mobile |
-| **Security** | 漏洞/密钥/敏感文件 | 安全要求 ≥ 5 |
-| **Healthcare** | HIPAA/HL7 FHIR/脱敏 | 医疗领域 |
-| **Auditor** | 审计追溯/合规 | 金融/医疗/政府 |
-| **Statistician** | 算法正确性/数据质量 | AI/Data 项目 |
-| **Performance** | 负载/响应时间 | 大型项目 |
-| **Compliance** | GDPR / ISO 27001 | 监管行业 |
-| **Business** | 需求一致性/文档完整 | 业务系统 |
-| **Architect** | 模块耦合/技术债务 | 企业级项目 |
-| **DevOps** | 健康检查/Docker/可观测性 | 生产部署 |
+| 层级 | 专家 | 核心能力 |
+|------|------|---------|
+| **代码层** | developer | 编译检查、类型安全 |
+| | hardcode_inspector | 硬编码检测、跨文件追踪 |
+| | auditor | 异常审计、bare except |
+| | linter | ruff/flake8/pylint/mypy |
+| **测试层** | tester | pytest + 覆盖率 |
+| | dependency | pip-audit + 过期依赖 |
+| **安全层** | security | eval/注入/反序列化 |
+| | phi_inspector | PHI 隐私扫描 |
+| | compliance | 许可证/GPL |
+| **数据层** | statistician | 过拟合/NaN/数据泄露 |
+| | data_integrity | ETL 行数/主键/外键 |
+| | med_validator | 血压/ICD/身份证 |
+| **架构层** | architect | 循环导入/大模块 |
+| | api_contract | endpoint/限流/分页 |
+| | concurrency | async阻塞/死锁 |
+| | db_migration | Alembic/downgrade |
+| **质量层** | performance | N+1/内存炸弹/阻塞IO |
+| | business | README/CHANGELOG |
+| | frontend | pkg.json/tsc/ESLint |
+| | user | UI框架/可访问性 |
+| **部署层** | devops | Docker/CI/.env.example |
+| | production_readiness | 连接池/优雅关闭/幂等 |
+| | observability | 结构化日志/trace/metrics |
+| | config_audit | .env漂移/硬编码IP |
+| **领域层** | healthcare | HIPAA/HL7 FHIR/脱敏 |
 
-**自适应推荐算法**：每个专家根据你的项目特征自动计算兼容性分数（0-1），高出阈值的自动加入审查队列。
-
-### 四阶段分层扫描
+### 五大能力
 
 ```
-阶段 0 — 环境基线检查
-  依赖完整性 · 数据库连通 · 缓存服务 · 外部 API 可达性
-
-阶段 1 — 静态深度分析
-  编译检查 · 类型检查 · 导入检查 · 代码规范
-
-阶段 2 — 运行时渐进验证
-  启动日志 · 健康检查 · 认证流程 · API 端点测试
-
-阶段 3 — 集成链路验证
-  前后端联通 · 页面渲染 · 数据流完整性
+全量扫描 ──── iterative-qa --round 1
+CI 门禁 ──── iterative-qa --ci --json
+风险评分 ──── iterative-qa --risk-score
+增量 diff ─── iterative-qa --diff
+基线对比 ──── iterative-qa --baseline-diff
 ```
 
 ### 迭代收敛机制
@@ -100,36 +115,47 @@ pip install -e .
 ```
 本轮发现 P0/P1 ──→ 继续下一轮
 本轮仅 P2/P3    ──→ 再跑一轮确认
-连续 2 轮无问题 ──→ ✅ 收敛，输出最终报告
+连续 2 轮无问题 ──→ 收敛，输出最终报告
 ```
 
 ---
 
-## 🏥 医疗领域专项
+## 医疗领域专项
 
 上海交通大学医学院背景，天生具备医疗领域基因：
 
 | 检查项 | 说明 |
 |---|---|
-| HIPAA 合规检查 | 自动检测医疗数据处理流程合规性 |
-| 数据脱敏验证 | 确保患者隐私（姓名、身份证号、病历号）安全 |
-| HL7 FHIR 标准 | 医疗数据交换标准兼容性检查 |
-| 临床术语验证 | SNOMED CT、ICD-10 编码规范检查 |
-
-```python
-from iterative_qa import QAService
-from iterative_qa.perspectives import HealthcareExpert
-
-qa = QAService(project_path="/path/to/med-app")
-qa.register_expert(HealthcareExpert())
-result = qa.validate(round_number=1)
-```
+| PHI 隐私扫描 | 日志、print、异常、导出、API 中的患者信息泄露 |
+| 医学数据校验 | 15类指标范围（血压60-260、血糖1-35、血氧60-100…） |
+| 身份证/IPC格式 | 18位校验位 + ICD-10 编码格式验证 |
+| ETL 数据完整性 | 行数校验、主键去重、外键孤儿、时间戳单调性 |
+| 数据脱敏验证 | 姓名→假名、身份证→哈希、导出缺脱敏 |
 
 ---
 
-## 🤖 大模型支持
+## CI/CD 集成
 
-**iterative-qa 内置大模型驱动能力**，提供智能报告生成和项目深度分析。支持 7 种模型提供商，按需选择：
+```yaml
+# .github/workflows/qa.yml
+- name: iterative-qa gate
+  run: iterative-qa --ci --json > qa-report.json
+  # exit_code=0 放行，exit_code=1 拦截
+```
+
+<!--
+    门禁规则：
+    - critical > 0   → FAIL
+    - high > 5       → FAIL
+    - medium > 30    → FAIL
+    - 否则            → PASS
+-->
+
+---
+
+## 大模型支持
+
+7 家厂商适配，未配置时自动降级为规则引擎模式（无需大模型也能完整校验）：
 
 | 提供商 | 配置方式 |
 |---|---|
@@ -142,37 +168,39 @@ result = qa.validate(round_number=1)
 | Hugging Face | `LLM_PROVIDER=huggingface` |
 
 ```bash
-# 复制配置模板
 cp .env.example .env
-
 # 填入你的 API Key
 # LLM_PROVIDER=openai
 # OPENAI_API_KEY=sk-xxxx
 ```
 
-未配置时自动降级为规则引擎模式，无需大模型也能完整校验。
-
 ---
 
-## 💻 API 使用
+## API 使用
 
 ```python
 from iterative_qa import QAService
 
 qa = QAService(project_path="/path/to/project")
 
-# 一键分析
-profile = qa.analyze_project()
-# → ProjectProfile(project_type="Web", tech_stack=["React","Python"], ...)
-
-# 智能推荐审查视角
-qa.recommend_perspectives()
-# → ['developer', 'security', 'user', 'performance', 'devops']
-
-# 执行校验
+# 全量扫描（26 位专家全部运行）
 result = qa.validate(round_number=1)
-for issue in result.issues_found:
-    print(f"[{issue.severity}] {issue.check_name} → {issue.remediation}")
+
+# CI 门禁
+gate = qa.ci_check()
+print(f"Exit: {gate['exit_code']} | Risk: {gate['risk_score']['risk_level']}")
+
+# 风险评分（加权，可输出雷达图数据）
+score = qa.compute_risk_score(result.issues_found)
+print(score["risk_level"], score["by_severity"], score["by_expert"])
+
+# 增量扫描（仅 git diff 变更文件）
+diff = qa.validate_diff(target_branch="HEAD~1")
+
+# 基线管理
+qa.save_baseline()
+delta = qa.diff_baseline()
+print(f"Trend: {delta['delta']['trend']} | +{delta['delta']['new_issues']} -{delta['delta']['resolved_issues']}")
 
 # LLM 驱动的智能报告
 qa.generate_report(use_llm=True)
@@ -183,7 +211,7 @@ qa.run_full_cycle(max_rounds=10)
 
 ---
 
-## 🔧 自定义扩展
+## 自定义扩展
 
 ```python
 from iterative_qa import BasePerspectiveExpert, ValidationResult
@@ -196,15 +224,11 @@ class MyExpert(BasePerspectiveExpert):
         return 0.9 if profile.get("domain") == "医疗" else 0.2
     
     def validate(self, profile):
-        return [
-            ValidationResult(
-                check_name="my_check",
-                status="warning",
-                message="发现问题",
-                severity="medium",
-                remediation="修复建议"
-            )
-        ]
+        return [ValidationResult(
+            check_name="my_check", status="warning",
+            message="发现问题", severity="medium",
+            remediation="修复建议"
+        )]
 
 qa = QAService()
 qa.register_expert(MyExpert)
@@ -212,54 +236,61 @@ qa.register_expert(MyExpert)
 
 ---
 
-## 📊 CLI 命令参考
+## CLI 命令参考
 
 | 参数 | 简写 | 说明 |
 |---|---|---|
 | `--path` | `-p` | 项目路径（默认当前目录） |
 | `--round` | `-r` | 校验轮次 |
-| `--full-cycle` | `-f` | 完整校验周期（自动收敛） |
+| `--full-cycle` | `-f` | 完整收敛周期 |
 | `--analyze` | `-a` | 仅分析项目特征 |
+| `--ci` | — | CI/CD 门禁模式 |
+| `--json` | — | 输出 JSON 格式 |
+| `--diff [TARGET]` | — | 增量扫描（默认 HEAD~1） |
+| `--risk-score` | — | 风险评分 |
+| `--baseline` | — | 保存基线 |
+| `--baseline-diff` | — | 对比基线 |
+| `--targeted` | — | 快速模式（仅 top-5 专家） |
 | `--report` | `-o` | 生成质量报告 |
 | `--output` | — | 报告输出文件路径 |
-| `--max-rounds` | — | 最大校验轮次（默认 10） |
 
 ---
 
-## 📁 项目结构
+## 问题分级
+
+| 等级 | 权重 | 说明 |
+|------|------|------|
+| critical (P0) | 100 | 服务不可启动 / PHI泄露 / 编译失败 |
+| high (P1) | 50 | 安全漏洞 / 数据不完整 / HTTP无超时 |
+| medium (P2) | 15 | 不符合最佳实践 / 缺少限流/分页 |
+| low (P3) | 3 | 优化建议 |
+
+---
+
+## 项目结构
 
 ```
 iterative-qa/
-├── .env.example          # 大模型环境配置模板（7种提供商）
-├── iterative_qa.yaml     # 产品化策略配置
-├── pyproject.toml        # 构建配置
-├── requirements.txt      # 依赖清单
-├── SKILL.md              # 技能规范（Trae 市场）
-├── skill.yaml            # 技能元数据
+├── .env.example              # 环境配置（7种LLM + Sentry + Redis）
+├── iterative_qa.yaml         # 策略配置（26位专家 + CI阈值）
+├── pyproject.toml            # 构建配置
+├── requirements.txt          # 依赖清单
+├── SKILL.md                  # 技能规范（Trae 市场）
+├── skill.yaml                # 技能元数据
 ├── iterative_qa/
-│   ├── __init__.py       # 模块导出
-│   ├── cli.py            # 命令行接口
-│   ├── core.py           # QAService 核心引擎
-│   ├── scanner.py        # 智能项目扫描器
-│   ├── models.py         # 数据模型定义
-│   ├── llm_service.py    # 多厂商大模型适配层
+│   ├── __init__.py
+│   ├── cli.py                # CLI（12个子命令）
+│   ├── core.py               # QAService + 5能力引擎
+│   ├── scanner.py            # 项目特征扫描器
+│   ├── models.py             # 数据模型
+│   ├── llm_service.py        # 7家LLM适配层
 │   └── perspectives/
-│       └── __init__.py   # 11 种视角专家
-└── dist/                 # 构建产物（wheel / tar.gz）
+│       └── __init__.py       # 26 位视角专家
 ```
 
 ---
 
-## 🤝 贡献
-
-1. Fork 本项目
-2. 创建功能分支 `feature/xxx`
-3. 提交代码（遵循 PEP 8）
-4. 发起 Pull Request
-
----
-
-## 💰 免费 + 捐赠
+## 免费 + 捐赠
 
 iterative-qa 完全免费。如果对你有帮助，欢迎：
 - ⭐ **Star 这个项目**
@@ -268,7 +299,7 @@ iterative-qa 完全免费。如果对你有帮助，欢迎：
 
 ---
 
-## 📄 许可证
+## 许可证
 
 MIT License © 2026 周良 · 上海交通大学医学院
 

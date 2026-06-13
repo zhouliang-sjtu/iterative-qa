@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iterative-qa"
-version = "3.0.0"
-description = "AI驱动的智能多视角质量校验引擎 - 通过大模型分析项目特征，动态识别最优验证视角，实现精准的多维度质量审计与工程优化"
+version = "4.0.0"
+description = "AI驱动的智能多视角质量校验引擎 — 26位视角专家全量扫描 + CI门禁 + 风险评分 + 增量diff + 基线对比"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     { name = "周良", email = "zhouliang@shsmu.edu.cn" }
 ]
-keywords = ["qa", "quality", "testing", "validation", "AI", "LLM", "code-quality", "healthcare"]
+keywords = ["qa", "quality", "testing", "validation", "code-review", "ci-cd", "risk-scoring", "healthcare", "phi", "privacy", "llm", "ai"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -27,6 +27,7 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Medical Science Apps",
 ]
 requires-python = ">=3.10"
 dependencies = [
@@ -47,11 +48,15 @@ baidu = ["qianfan>=0.1.0"]
 tongyi = ["dashscope>=1.0.0"]
 zhipu = ["zhipuai>=2.0.0"]
 huggingface = ["transformers>=4.37.0", "torch>=2.1.0"]
+lint = ["ruff>=0.4.0", "flake8>=7.0.0", "pylint>=3.2.0", "mypy>=1.10.0"]
+test = ["pytest>=8.2.0", "pytest-asyncio>=0.23.0", "pytest-cov>=5.0.0"]
+security = ["pip-audit>=2.7.0", "bandit>=1.7.0"]
 dev = [
-    "pytest>=8.2.0",
-    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
     "mypy>=1.10.0",
-    "vulture>=2.10.0",
+    "pytest>=8.2.0",
+    "pytest-cov>=5.0.0",
+    "pip-audit>=2.7.0",
 ]
 
 [project.scripts]

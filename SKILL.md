@@ -1,7 +1,7 @@
 ---
 name: "iterative-qa"
-version: "3.0.0"
-description: "AI驱动的智能多视角质量校验引擎 - 通过大模型分析项目特征，动态识别最优验证视角，实现精准的多维度质量审计与工程优化"
+version: "4.0.0"
+description: "AI驱动的智能多视角质量校验引擎 — 26位视角专家全量扫描 + CI门禁 + 风险评分 + 增量diff + 基线对比"
 author:
   name: "周良"
   email: "zhouliang@shsmu.edu.cn"
@@ -13,45 +13,40 @@ tags:
   - "工程优化"
   - "多视角分析"
   - "AI辅助开发"
-  - "调试工具"
   - "CI/CD"
   - "质量保证"
+  - "安全审计"
+  - "隐私合规"
+  - "医疗信息化"
 ---
 
 # iterative-qa - AI驱动的智能质量校验引擎
 
-## 🌟 产品概述
+## 产品概述
 
-**iterative-qa** 是一款基于大语言模型的智能质量校验工具，通过分析项目特征动态识别最优验证视角，实现精准的多维度质量审计与工程优化。
+**iterative-qa** 是一款基于大语言模型的智能质量校验工具，配备 **26 位视角专家**，通过全量代码扫描、CI 门禁、风险评分、增量 diff 和基线对比五大能力，将项目从粗胚打磨到生产可部署。
 
 ### 核心价值
 
 | 维度 | 价值 |
 |------|------|
-| **智能识别** | 通过大模型分析项目特征，自动推荐最优视角组合 |
-| **灵活适配** | 支持 Web/移动/数据/AI/嵌入式等多种项目类型 |
-| **自主决策** | 无需人工干预，自动完成端到端质量校验 |
-| **领域扩展** | 针对医疗健康领域提供专项优化 |
-
-### 适用场景
-
-- 项目质量审计
-- Bug 排查与修复
-- 代码审查后深度优化
-- CI/CD 集成
-- 项目重构前评估
+| **全量覆盖** | 26 位专家默认全部运行，不留死角 |
+| **CI 门禁** | `--ci` 自动判定 exit_code，集成 GitHub Actions |
+| **风险量化** | 加权评分引擎，输出雷达图数据结构 |
+| **增量扫描** | `--diff` 仅扫变更文件/行，秒级反馈 |
+| **基线追踪** | `--baseline` 保存快照，`--baseline-diff` 对比趋势 |
+| **迭代收敛** | 指纹追踪多轮运行，自动判定收敛 |
+| **医疗专项** | PHI 隐私扫描、医学数据校验、HIPAA 合规 |
 
 ---
 
-## 🚀 快速开始
-
-### 安装方式
+## 快速开始
 
 ```bash
-# 方式1: pip安装（GitHub Releases，推荐）
-pip install https://github.com/zhouliang-sjtu/iterative-qa/releases/download/v3.0.0/iterative_qa-3.0.0-py3-none-any.whl
+# pip 安装
+pip install https://github.com/zhouliang-sjtu/iterative-qa/releases/download/v4.0.0/iterative_qa-4.0.0-py3-none-any.whl
 
-# 方式2: 源码安装
+# 或源码安装
 git clone https://github.com/zhouliang-sjtu/iterative-qa.git
 cd iterative-qa
 pip install -e .
@@ -59,189 +54,234 @@ pip install -e .
 
 ### 使用方式
 
-#### 方式一：命令行
+#### 命令行 — 全量扫描（默认）
 
 ```bash
-# 分析项目特征
-iterative-qa --analyze
-
-# 执行第1轮质量校验
+# 全量扫描（26 位专家全部运行）
 iterative-qa --round 1
 
-# 执行完整校验周期直到收敛
-iterative-qa --full-cycle
+# CI/CD 门禁模式
+iterative-qa --ci --json
 
-# 生成质量报告
-iterative-qa --report --output report.md
+# 增量扫描（仅 git diff 变更）
+iterative-qa --diff
+
+# 风险评分
+iterative-qa --risk-score
+
+# 建立基线 + 对比变化
+iterative-qa --baseline
+# ...修改代码...
+iterative-qa --baseline-diff
+
+# 完整收敛周期
+iterative-qa --full-cycle --report --output report.md
 ```
 
-#### 方式二：API调用
+#### API 调用
 
 ```python
 from iterative_qa import QAService
 
-qa_service = QAService(project_path="/path/to/project")
+qa = QAService(project_path="/path/to/project")
 
-# 分析项目特征
-profile = qa_service.analyze_project()
-print(f"项目类型: {profile.project_type}")
+# 全量扫描（默认 26 位专家）
+result = qa.validate(round_number=1)
 
-# 获取推荐视角
-perspectives = qa_service.recommend_perspectives()
-print(f"推荐视角: {perspectives}")
+# CI 门禁
+gate = qa.ci_check()
+print(f"Exit: {gate['exit_code']}, Risk: {gate['risk_score']['risk_level']}")
 
-# 执行校验
-result = qa_service.validate(round_number=1)
+# 风险评分
+score = qa.compute_risk_score(result.issues_found)
+print(score["risk_level"], score["total_score"])
 
-# 生成报告
-report = qa_service.generate_report()
-print(report)
+# 增量扫描
+diff = qa.validate_diff(target_branch="HEAD~1")
+
+# 基线对比
+qa.save_baseline()
+delta = qa.diff_baseline()
+print(delta["delta"]["trend"])  # improving | stable | degrading
 ```
 
 ---
 
-## 🧠 智能视角专家系统
+## 26 位视角专家
 
-### 内置视角专家
-
-| 视角专家 | 适用场景 | 验证重点 |
-|----------|----------|----------|
-| DeveloperExpert | 所有项目 | 代码质量、类型安全 |
-| UserExpert | 面向用户项目 | 用户体验、可用性 |
-| SecurityExpert | 敏感数据项目 | 漏洞扫描、渗透测试 |
-| HealthcareExpert | 医疗健康领域 | HIPAA合规、数据脱敏 |
-| AuditorExpert | 金融/政府/医疗 | 合规性、可追溯性 |
-| StatisticianExpert | 数据/AI项目 | 算法正确性、数据质量 |
-| PerformanceExpert | 高并发系统 | 负载测试、响应时间 |
-| ComplianceExpert | 监管行业 | GDPR/ISO27001 |
-| BusinessExpert | 业务系统 | 需求一致性 |
-| ArchitectExpert | 大型系统 | 系统架构、技术债务 |
-| DevOpsExpert | 生产环境 | 可观测性、容错能力 |
-
-### 智能视角选择算法
-
-系统会自动：
-1. 扫描项目特征（技术栈、规模、领域等）
-2. 计算每个视角专家的兼容性分数（0-1）
-3. 根据兼容性阈值（默认 0.3）筛选视角专家
-4. 按兼容性优先级排序执行验证
-
----
-
-## 🔍 四阶段分层扫描
-
-```
-阶段0: 环境基线检查
-  └─ 依赖完整性、数据库连通、缓存服务、外部API
-
-阶段1: 静态深度分析
-  └─ 编译检查、类型检查、导入检查、ORM关系验证
-
-阶段2: 运行时渐进验证
-  └─ 启动日志审计、健康检查、认证流程、API测试
-
-阶段3: 集成链路验证
-  └─ 前后端联通、页面渲染、数据流完整
-
-阶段4: 回归深度清理
-  └─ 修复副作用检测、全量回归测试
-```
+| 层级 | 专家 | 核心能力 |
+|------|------|---------|
+| **代码层** | developer | 编译检查、类型安全 |
+| | hardcode_inspector | 硬编码检测、跨文件追踪 |
+| | auditor | 异常处理审计、bare except |
+| | linter | ruff/flake8/pylint/mypy |
+| **测试层** | tester | pytest + 覆盖率分级 |
+| | dependency | pip-audit 漏洞 + 过期依赖 |
+| **安全层** | security | eval/注入/反序列化 7类 |
+| | phi_inspector | PHI 日志泄露/导出未脱敏 |
+| | compliance | 许可证/GPL依赖 |
+| **数据层** | statistician | 过拟合/NaN/数据泄露 |
+| | data_integrity | ETL行数/主键/外键 |
+| | med_validator | 血压/ICD/身份证校验 |
+| **架构层** | architect | 循环导入 + 大模块识别 |
+| | api_contract | endpoint/超时/限流/分页 |
+| | concurrency | async阻塞/死锁/session泄露 |
+| | db_migration | Alembic同步/downgrade |
+| **质量层** | performance | N+1/内存炸弹/阻塞IO |
+| | business | README/CHANGELOG/.gitignore |
+| | frontend | package.json/tsc/ESLint |
+| | user | UI框架/组件库/可访问性 |
+| **部署层** | devops | Docker/CI/.env.example |
+| | production_readiness | 连接池/优雅关闭/幂等 |
+| | observability | 结构化日志/trace/metrics |
+| | config_audit | .env漂移/硬编码IP |
+| **领域层** | healthcare | HIPAA/HL7 FHIR/脱敏 |
 
 ---
 
-## 🏥 医疗健康领域专项支持
+## 五大能力
 
-系统针对医疗健康领域提供专项优化，包括：
-
-### 医疗领域视角增强
-
-| 检查项 | 描述 |
-|--------|------|
-| HIPAA合规检查 | 自动检测医疗数据处理合规性 |
-| 数据脱敏验证 | 确保患者隐私数据安全 |
-| 临床数据标准 | HL7 FHIR 标准兼容性检查 |
-| 医疗术语验证 | SNOMED CT、ICD-10 编码验证 |
-
-### 使用示例
-
-```python
-from iterative_qa import QAService
-from iterative_qa.perspectives import HealthcareExpert
-
-qa_service = QAService(project_path="/path/to/healthcare-project")
-qa_service.register_expert(HealthcareExpert())
-
-result = qa_service.validate(perspectives=["healthcare", "security", "auditor"])
-```
+| 能力 | CLI | 说明 |
+|------|-----|------|
+| **全量扫描** | `--round N` | 26 位专家全部运行（默认） |
+| **CI 门禁** | `--ci --json` | critical>0 或 high>5 时 exit_code=1 |
+| **风险评分** | `--risk-score` | 加权评分 + 雷达图数据 |
+| **增量扫描** | `--diff` | git diff 变更文件/行级扫描 |
+| **基线追踪** | `--baseline` / `--baseline-diff` | 保存基线 + 改善/恶化趋势 |
 
 ---
 
-## 🔧 自定义扩展
+## 大模型支持
 
-### 添加自定义视角专家
+7 家厂商适配，未配置时自动降级为规则引擎模式：
 
-```python
-from iterative_qa import BasePerspectiveExpert
-
-class MyCustomExpert(BasePerspectiveExpert):
-    def get_name(self):
-        return "MyCustomExpert"
-    
-    def get_compatibility(self, project_features):
-        return 0.8
-    
-    def validate(self, project_features):
-        results = []
-        # ...
-        return results
-    
-    def optimize(self, data):
-        return data
-
-qa_service = QAService()
-qa_service.register_expert("my_custom", MyCustomExpert)
-```
+| 提供商 | 配置 |
+|---|---|
+| OpenAI (GPT-4o) | `LLM_PROVIDER=openai` |
+| Anthropic (Claude) | `LLM_PROVIDER=anthropic` |
+| Google (Gemini) | `LLM_PROVIDER=google` |
+| 百度文心一言 | `LLM_PROVIDER=baidu` |
+| 阿里通义千问 | `LLM_PROVIDER=tongyi` |
+| 智谱 GLM | `LLM_PROVIDER=zhipu` |
+| Hugging Face | `LLM_PROVIDER=huggingface` |
 
 ---
 
-## 📊 问题分级体系
+## 医疗领域专项
 
-| 等级 | 定义 | 响应时间 |
-|------|------|----------|
-| **P0** | 服务不可启动 / 核心功能不可用 | 立即修复 |
-| **P1** | 部分功能异常 / 数据不完整 | 本迭代修复 |
-| **P2** | 不影响功能但不符合最佳实践 | 记录，后续修复 |
-| **P3** | 优化建议 / 非关键问题 | 记录到backlog |
+| 检查项 | 说明 |
+|---|---|
+| PHI 隐私扫描 | 日志、print、异常、导出、API 中的患者信息泄露 |
+| 医学数据校验 | 血压(60-260)、血氧(60-100)、ICD-10格式、身份证校验位 |
+| ETL 数据完整性 | 行数校验、主键去重、外键孤儿、时间戳单调性 |
+| 数据脱敏验证 | 姓名→假名、身份证→哈希、数据导出缺脱敏 |
 
 ---
 
-## 📈 收敛判定标准
+## 问题分级
 
-| 状态 | 标准 | 行动 |
+| 等级 | 权重 | 说明 |
 |------|------|------|
-| 未收敛 | 本轮发现 ≥ 1 个 P0/P1 | 继续下一轮 |
-| 趋于收敛 | 本轮仅发现 P2/P3 | 再跑一轮确认 |
-| 已收敛 | 连续 2 轮无新 P0/P1/P2 | 输出最终报告 |
+| critical (P0) | 100 | 服务不可启动 / PHI泄露 / 编译失败 |
+| high (P1) | 50 | 安全漏洞 / 数据不完整 / HTTP无超时 |
+| medium (P2) | 15 | 不符合最佳实践 / 缺少限流/分页 |
+| low (P3) | 3 | 优化建议 |
 
 ---
 
-## 💰 免费 + 捐赠
+## CI/CD 集成 (GitHub Actions)
 
-iterative-qa 完全免费使用。如果这个工具对你有帮助，欢迎通过以下方式支持：
-
-- **微信赞赏码** / **支付宝赞赏码** — 扫码支持
-- **GitHub Sponsors** — https://github.com/sponsors/zhouliang-sjtu
-
----
-
-## 📄 许可证
-
-MIT License
+```yaml
+- name: iterative-qa gate
+  run: iterative-qa --ci --json > qa-report.json
+  # exit_code 自动判定门禁是否通过
+```
 
 ---
 
-**版本**: 3.0.0  
-**状态**: ✅ 生产就绪  
-**作者**: 周良  
-**邮箱**: zhouliang@shsmu.edu.cn  
-**组织**: 上海交通大学医学院
+## 自定义扩展
+
+```python
+from iterative_qa import BasePerspectiveExpert, ValidationResult
+
+class MyExpert(BasePerspectiveExpert):
+    def get_name(self):
+        return "my_expert"
+    
+    def get_compatibility(self, profile):
+        return 0.9
+    
+    def validate(self, profile):
+        return [ValidationResult(
+            check_name="my_check", status="warning",
+            message="发现问题", severity="medium",
+            remediation="修复建议"
+        )]
+
+qa = QAService()
+qa.register_expert(MyExpert)
+```
+
+---
+
+## CLI 命令参考
+
+| 参数 | 说明 |
+|------|------|
+| `--path, -p` | 项目路径（默认当前目录） |
+| `--round, -r` | 校验轮次 |
+| `--full-cycle, -f` | 完整收敛周期 |
+| `--analyze, -a` | 仅分析项目特征 |
+| `--ci` | CI/CD 门禁模式 |
+| `--json` | 输出 JSON 格式 |
+| `--diff [TARGET]` | 增量扫描（默认 HEAD~1） |
+| `--risk-score` | 风险评分 |
+| `--baseline` | 保存基线 |
+| `--baseline-diff` | 对比基线 |
+| `--targeted` | 快速模式（仅 top-5 专家） |
+| `--report, -o` | 生成报告 |
+| `--output` | 报告输出路径 |
+
+---
+
+## 项目结构
+
+```
+iterative-qa/
+├── .env.example              # 环境配置模板（7种LLM + Sentry + Redis）
+├── iterative_qa.yaml         # 策略配置（26位专家 + CI阈值）
+├── pyproject.toml            # 构建配置
+├── requirements.txt          # 依赖清单
+├── SKILL.md                  # 技能规范
+├── skill.yaml                # 技能元数据
+├── iterative_qa/
+│   ├── __init__.py
+│   ├── cli.py                # 命令行接口（12个子命令）
+│   ├── core.py               # QAService + 5能力引擎
+│   ├── scanner.py            # 项目特征扫描器
+│   ├── models.py             # 数据模型
+│   ├── llm_service.py        # 7家LLM适配层
+│   └── perspectives/
+│       └── __init__.py       # 26 位视角专家
+```
+
+---
+
+## 免费 + 捐赠
+
+iterative-qa 完全免费。欢迎通过以下方式支持：
+- ⭐ Star 这个项目
+- 💰 [GitHub Sponsors](https://github.com/sponsors/zhouliang-sjtu)
+
+---
+
+## 许可证
+
+MIT License © 2026 周良 · 上海交通大学医学院
+
+---
+
+**版本**: 4.0.0  
+**状态**: 生产就绪  
+**专家**: 26 位  
+**能力**: 全量扫描 · CI 门禁 · 风险评分 · 增量 diff · 基线对比
