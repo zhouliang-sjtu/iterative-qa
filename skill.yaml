@@ -1,0 +1,88 @@
+name: "iterative-qa"
+version: "3.0.0"
+description: "AI驱动的智能多视角质量校验引擎 - 通过大模型分析项目特征，动态识别最优验证视角，实现精准的多维度质量审计与工程优化"
+author:
+  name: "周良"
+  email: "zhouliang@shsmu.edu.cn"
+  organization: "上海交通大学医学院"
+category: "开发工具"
+tags:
+  - "代码质量"
+  - "自动化测试"
+  - "工程优化"
+  - "多视角分析"
+  - "AI辅助开发"
+  - "调试工具"
+  - "CI/CD"
+  - "质量保证"
+
+# 技能入口配置
+entry:
+  type: "markdown"
+  file: "SKILL.md"
+
+# 功能特性
+features:
+  - name: "智能项目扫描"
+    description: "自动分析项目结构、技术栈、规模和业务领域"
+  - name: "大模型视角识别"
+    description: "基于项目特征动态推荐最合适的质量校验视角组合"
+  - name: "动态专家系统"
+    description: "10+种视角专家，自动适配不同项目类型"
+  - name: "四阶段分层扫描"
+    description: "环境基线→静态分析→运行时验证→集成验证"
+  - name: "智能问题分类"
+    description: "自动分类问题等级和类型，提供修复建议"
+  - name: "质量报告生成"
+    description: "大模型驱动的专业质量报告自动生成"
+
+# 支持的项目类型
+supported_projects:
+  - "Web应用"
+  - "移动应用"
+  - "桌面应用"
+  - "数据工程"
+  - "AI/ML项目"
+  - "嵌入式系统"
+  - "后端服务"
+
+# 技术栈要求
+requirements:
+  - "Python 3.10+"
+  - "Node.js 18+"
+  - "Git"
+
+# 定价模型
+pricing:
+  - name: "免费版"
+    description: "基础质量校验，支持单个项目"
+    price: "免费"
+  - name: "专业版"
+    description: "高级分析功能，支持多个项目"
+    price: "¥99/月"
+  - name: "企业版"
+    description: "定制化服务，私有化部署"
+    price: "联系销售"
+
+# 服务条款
+terms:
+  privacy_policy: "https://example.com/privacy"
+  service_agreement: "https://example.com/terms"
+
+# 兼容性
+compatibility:
+  platforms:
+    - "Windows"
+    - "macOS"
+    - "Linux"
+  frameworks:
+    - "FastAPI"
+    - "Django"
+    - "React"
+    - "Vue"
+    - "TypeScript"
+
+# 认证信息
+certifications:
+  - "ISO 27001"
+  - "GDPR Compliant"
