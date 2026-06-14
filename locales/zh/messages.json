@@ -1,0 +1,37 @@
+{
+  "cli": {
+    "scan_start": "开始多智能体代码审查...",
+    "scan_complete": "扫描完成",
+    "round": "第{n}轮",
+    "findings": "个问题",
+    "agents_active": "个活跃Agent",
+    "status": "状态",
+    "passed": "通过",
+    "failed": "未通过",
+    "warning": "警告",
+    "converged": "{n}轮后收敛",
+    "not_converged": "{n}轮后未收敛",
+    "report_saved": "报告已保存至"
+  },
+  "severity": {
+    "critical": "严重",
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+    "info": "信息"
+  },
+  "agent": {
+    "inspecting": "正在探查...",
+    "found": "发现{n}个问题",
+    "reviewing": "正在交叉审查...",
+    "debating": "正在辩论{n}个争议发现...",
+    "ruling": "裁决: {verdict}",
+    "generating_fix": "正在生成修复方案..."
+  },
+  "fix": {
+    "plan_generated": "已生成{n}项修复方案",
+    "executing": "正在执行修复...",
+    "backup_created": "已备份至{path}",
+    "fix_applied": "已修复{file}"
+  }
+}

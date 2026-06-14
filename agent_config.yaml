@@ -1,0 +1,100 @@
+# =============================================================================
+# codespect-matrix v1.0.0 — Agent Runtime Configuration
+# =============================================================================
+# Each section is read by AgentOrchestrator at initialization.
+
+# ─── Agent Selection ─────────────────────────────────────────────────────────
+agent_selection:
+  # Strategy: profile_matching | fixed_list | auto
+  strategy: auto
+  # When strategy=profile_matching: minimum compatibility score to activate an agent (0.0-1.0)
+  min_compatibility: 0.3
+  # Max agents per round (parallelism budget)
+  max_active: 8
+
+# ─── Inspection Phase ─────────────────────────────────────────────────────────
+inspection:
+  # Max tokens of file context to send to each LLM agent
+  max_context_tokens: 12000
+  # Timeout per agent inspection (seconds)
+  timeout_per_agent: 120
+  # Number of retries if LLM call fails
+  retry_count: 2
+
+# ─── Review Phase (Cross-validation) ──────────────────────────────────────────
+review:
+  # Min reviewers per finding (from different domains)
+  min_reviewers: 2
+  # Confidence required for "confirmed" verdict (0.0-1.0)
+  confirm_threshold: 0.75
+  # If reviewers disagree by more than this, escalate to debate
+  disagreement_threshold: 0.35
+
+# ─── Debate Phase ─────────────────────────────────────────────────────────────
+debate:
+  # Max debate rounds for a single finding
+  max_rounds: 3
+  # Arbiter confidence threshold to close debate
+  arbiter_threshold: 0.8
+  # Timeout per debate round (seconds)
+  round_timeout: 90
+
+# ─── Convergence ──────────────────────────────────────────────────────────────
+convergence:
+  # Max overall inspection rounds
+  max_rounds: 5
+  # Consecutive rounds with no new findings before auto-stop
+  stability_threshold: 2
+
+# ─── Fix Engine ───────────────────────────────────────────────────────────────
+fix:
+  # Automatically backup files before modification
+  auto_backup: true
+  backup_dir: ".codespect_matrix_backups"
+  # Require user confirmation before executing fixes
+  require_confirmation: true
+  # Max files to fix in a single session
+  max_files_per_session: 20
+
+# ─── Memory System ────────────────────────────────────────────────────────────
+memory:
+  # Enable project-level memory (false positives, scan history, convergence tracking)
+  project_memory: true
+  project_memory_file: ".codespect_matrix_agent_memory.json"
+  # Enable global cross-project knowledge base
+  global_knowledge: true
+  global_kb_dir: "~/.codespect_matrix_knowledge/"
+
+# ─── Severity Weights (for risk scoring) ──────────────────────────────────────
+severity:
+  critical:
+    label: "P0"
+    description: "Service crash / PHI leak / compile failure"
+    weight: 100
+  high:
+    label: "P1"
+    description: "Security vulnerability / data loss / missing timeout"
+    weight: 50
+  medium:
+    label: "P2"
+    description: "Best practice violation / missing rate limit"
+    weight: 15
+  low:
+    label: "P3"
+    description: "Optimization suggestion"
+    weight: 3
+
+# ─── CI/CD Gate Thresholds ────────────────────────────────────────────────────
+ci_gate:
+  max_critical: 0
+  max_high: 5
+  max_medium: 30
+
+# ─── Engine Fallback ──────────────────────────────────────────────────────────
+engine:
+  # When LLM is unavailable: rule_only | skip | error
+  llm_unavailable: rule_only
+  # LLM model temperature for analysis (low = consistent, high = creative)
+  analysis_temperature: 0.2
+  # Default LLM model (override via LLM_MODEL env var)
+  default_model: "gpt-4o"

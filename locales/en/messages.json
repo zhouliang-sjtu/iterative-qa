@@ -1,0 +1,37 @@
+{
+  "cli": {
+    "scan_start": "Starting multi-agent code review...",
+    "scan_complete": "Scan complete",
+    "round": "Round",
+    "findings": "findings",
+    "agents_active": "active agents",
+    "status": "Status",
+    "passed": "passed",
+    "failed": "failed",
+    "warning": "warning",
+    "converged": "Converged after {n} rounds",
+    "not_converged": "Not converged after {n} rounds",
+    "report_saved": "Report saved to"
+  },
+  "severity": {
+    "critical": "CRITICAL",
+    "high": "HIGH",
+    "medium": "MEDIUM",
+    "low": "LOW",
+    "info": "INFO"
+  },
+  "agent": {
+    "inspecting": "Inspecting...",
+    "found": "Found {n} issues",
+    "reviewing": "Cross-reviewing...",
+    "debating": "Debating {n} contested findings...",
+    "ruling": "Ruling: {verdict}",
+    "generating_fix": "Generating fix proposals..."
+  },
+  "fix": {
+    "plan_generated": "Fix plan generated: {n} actions",
+    "executing": "Executing fix...",
+    "backup_created": "Backup created at {path}",
+    "fix_applied": "Fix applied to {file}"
+  }
+}

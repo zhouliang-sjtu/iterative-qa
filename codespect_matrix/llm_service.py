@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
+# 审查/分析专用温度 — 低温度确保输出一致性和精确性
+DEFAULT_ANALYSIS_TEMPERATURE = 0.2
+
 
 class LLMService:
     """大模型服务封装类"""
@@ -251,51 +254,98 @@ class LLMService:
         
         return self.generate(prompt, temperature=0.5, max_tokens=4096)
     
-    def recommend_perspectives(self, project_features: Dict[str, Any]) -> List[str]:
+    def generate_fix_plan(self, issues: List[Dict[str, Any]], project_path: str) -> List[Dict[str, Any]]:
         """
-        使用大模型推荐视角专家
+        使用大模型生成具体的修复方案
         
         Args:
-            project_features: 项目特征
+            issues: 问题列表，每个问题包含 check_name, message, severity, remediation
+            project_path: 项目根目录
         
         Returns:
-            推荐的视角专家名称列表
+            修复动作列表 [{file_path, line_start, line_end, old_code, new_code, description, auto_safe, ...}]
         """
-        prompt = f"""
-        作为一位资深的软件测试专家，请根据以下项目特征推荐最合适的质量检查视角：
+        import glob as glob_mod
         
-        项目特征：
-        - 项目类型: {project_features.get('project_type', '')}
-        - 技术栈: {', '.join(project_features.get('tech_stack', []))}
-        - 规模: {project_features.get('scale', '')}
-        - 复杂度: {project_features.get('complexity', '')}
-        - 业务领域: {project_features.get('domain', '')}
-        - 安全要求: {project_features.get('security_requirements', 5)}/10
+        # 收集项目中所有 .py 文件的前 30 行作为上下文
+        file_map = {}
+        for filepath in glob_mod.glob(os.path.join(project_path, "**", "*.py"), recursive=True):
+            relpath = os.path.relpath(filepath, project_path)
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    if len(content) < 8000:
+                        file_map[relpath] = content
+                    else:
+                        # 只取首尾，中间给摘要
+                        file_map[relpath] = (
+                            content[:3000] + "\n# ... (中间省略) ...\n" + content[-2000:]
+                        )
+            except Exception:
+                continue
         
-        可用视角专家：
-        1. developer - 代码质量、类型安全、架构设计
-        2. user - 用户体验、可用性、界面友好性
-        3. security - 漏洞扫描、渗透测试、数据加密
-        4. healthcare - 医疗数据合规性、HIPAA合规、数据脱敏
-        5. auditor - 合规性、可追溯性、审计日志
-        6. statistician - 算法正确性、数据质量、模型验证
-        7. performance - 负载测试、响应时间、资源消耗
-        8. compliance - GDPR/ISO27001/行业标准合规
-        9. business - 需求一致性、业务流程正确性
-        10. architect - 系统架构、模块耦合、技术债务
-        11. devops - 可观测性、容错能力、扩展性
+        # 仅保留内容最相关的 20 个文件（优先小文件）
+        relevant_files = sorted(file_map.items(), key=lambda x: len(x[1]))[:20]
+        files_context = ""
+        for fname, fcontent in relevant_files:
+            files_context += f"\n\n=== FILE: {fname} ===\n{fcontent}"
+        if len(files_context) > 24000:
+            files_context = files_context[:24000] + "\n# ... 更多文件已省略 ..."
         
-        请按优先级推荐5个最合适的视角专家，只返回专家名称，用逗号分隔。
-        """
+        issues_text = "\n".join([
+            f"- [{i.get('severity','info')}] {i.get('check_name','')}: {i.get('message','')}\n  修复建议: {i.get('remediation','无')}"
+            for i in issues
+        ])
         
-        result = self.generate(prompt, temperature=0.2, max_tokens=100)
-        return [s.strip() for s in result.split(",") if s.strip()]
+        prompt = f"""你是一位高级软件工程师和代码审查专家。以下是代码扫描发现的问题和项目源码，请为每个问题生成精确的修复方案。
+
+## 项目文件:
+{files_context}
+
+## 扫描发现的问题:
+{issues_text}
+
+## 要求:
+请分析每个问题，找到源码中的具体位置，生成修复代码。输出一个 JSON 数组，每个元素格式如下：
+
+{{
+  "file_path": "相对于项目的文件路径",
+  "line_start": 起始行号(1-based),
+  "line_end": 结束行号,
+  "old_code": "要被替换的原始代码（必须与源文件完全一致）",
+  "new_code": "替换后的新代码",
+  "description": "中文修复说明",
+  "auto_safe": true/false  # 简单替换(如加注释/改变量名/加try-except)为true; 涉及逻辑更改/架构调整为false
+}}
+
+注意:
+1. old_code 必须与源文件中的代码一字不差
+2. 保持原有缩进风格
+3. 只修复具体问题，不要额外重构
+4. 如果某个问题无法确定具体代码位置，跳过它
+5. 只返回 JSON 数组，不要其他文字
+
+JSON:"""
+        
+        result = self.generate(prompt, temperature=DEFAULT_ANALYSIS_TEMPERATURE, max_tokens=8192)
+        return self._parse_json_array(result)
+    
+    def _parse_json_array(self, text: str) -> List[Dict[str, Any]]:
+        """解析JSON数组响应"""
+        import json
+        try:
+            start = text.find("[")
+            end = text.rfind("]") + 1
+            if start != -1 and end != 0:
+                return json.loads(text[start:end])
+            return []
+        except json.JSONDecodeError:
+            return []
     
     def _parse_json(self, text: str) -> Dict[str, Any]:
         """解析JSON响应"""
         import json
         try:
-            # 尝试提取JSON部分
             start = text.find("{")
             end = text.rfind("}") + 1
             if start != -1 and end != 0:

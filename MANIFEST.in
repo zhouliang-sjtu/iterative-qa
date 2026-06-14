@@ -1,19 +1,15 @@
-# 包含配置文件
-include iterative_qa.yaml
+include agent_config.yaml
 include .env.example
 
-# 包含文档
 include README.md
-include SKILL.md
-include skill.yaml
+include README_zh.md
+include CHANGELOG.md
 
-# 包含许可证
 include LICENSE
 
-# 包含测试文件
 recursive-include tests *.py
+recursive-include locales *.json
 
-# 排除不需要的文件
 exclude .gitignore
 exclude .git/*
 exclude __pycache__/*

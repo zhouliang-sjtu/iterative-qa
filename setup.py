@@ -1,4 +1,4 @@
-"""codespect-matrix - AI驱动的智能质量校验引擎"""
+"""codespect-matrix — Multi-Agent Code Evolution Platform"""
 
 from setuptools import setup, find_packages
 
@@ -7,10 +7,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="codespect-matrix",
-    version="4.0.0",
+    version="1.0.0",
     author="周良",
     author_email="zhouliang@shsmu.edu.cn",
-    description="codespect-matrix — 26位视角专家矩阵式代码质量审计引擎",
+    description="codespect-matrix — 16-Agent Code Evolution Platform · Debate Review · Hybrid Engine · Health Scoring",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/zhouliang-sjtu/codespect-matrix",
@@ -40,6 +40,6 @@ setup(
     keywords=[
         "qa", "quality", "testing", "validation", "code-review",
         "ci-cd", "risk-scoring", "healthcare", "phi", "privacy",
-        "llm", "ai", "devops", "security", "compliance",
+        "llm", "ai", "multi-agent", "agent", "evolution", "debate-review",
     ],
 )

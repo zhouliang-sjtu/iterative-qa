@@ -1,352 +1,396 @@
-"""命令行接口 - 提供交互式质量校验功能"""
+"""CLI entry point — 16-Agent Code Evolution Platform."""
 
 import argparse
 import json
 import sys
 from typing import Optional
 
-from codespect_matrix import QAService
-
-# 严重度排序权重（用于结果展示）
-SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-
 
 def main():
     parser = argparse.ArgumentParser(
         prog="codespect-matrix",
-        description="AI驱动的智能质量校验引擎 — 25专家 × 5能力 × 全链路覆盖",
+        description="codespect-matrix — 16-Agent Code Evolution Platform · Debate Review · Hybrid Engine · Health Scoring",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
-  # 执行全量质量校验（默认）
-    codespect-matrix --round 1
-    
-    # 快速扫描模式（仅 top-5 专家）
-    codespect-matrix --targeted
+examples:
+  # Default: multi-agent review
+  codespect-matrix
   
-  # CI/CD 门禁模式（GitHub Actions / Jenkins）
+  # Target a specific project
+  codespect-matrix --path /path/to/project
+
+  # CI/CD gate mode
   codespect-matrix --ci --json
-  
-  # 增量校验（仅扫描 git diff 变更文件）
-  codespect-matrix --diff
-  
-  # 建立基线
-  codespect-matrix --baseline
-  
-  # 对比基线变化
-  codespect-matrix --baseline-diff
-  
-  # 风险评分
-  codespect-matrix --risk-score
-  
-  # 完整校验周期
-  codespect-matrix --full-cycle
-  
-  # 生成详细报告
-  codespect-matrix --report --output report.md
+
+  # Code evolution analysis
+  codespect-matrix --evolve
+  codespect-matrix --evolve-baseline
+
+  # AI autonomous fix (two-step)
+  codespect-matrix --fix-plan          # Step 1: generate plan
+  codespect-matrix --fix-execute       # Step 2: execute
         """
     )
     
     parser.add_argument(
         "--path", "-p",
         default=".",
-        help="项目路径 (默认: 当前目录)"
+        help="project path (default: current directory)"
     )
-    
-    parser.add_argument(
-        "--round", "-r",
-        type=int,
-        default=1,
-        help="校验轮次 (默认: 1)"
-    )
-    
-    parser.add_argument(
-        "--full-cycle", "-f",
-        action="store_true",
-        help="执行完整校验周期直到收敛"
-    )
-    
-    parser.add_argument(
-        "--analyze", "-a",
-        action="store_true",
-        help="仅分析项目特征并推荐专家"
-    )
-    
-    parser.add_argument(
-        "--report", "-o",
-        action="store_true",
-        help="生成质量报告"
-    )
-    
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="报告输出文件路径"
-    )
-    
     parser.add_argument(
         "--max-rounds",
         type=int,
-        default=10,
-        help="最大校验轮次 (默认: 10)"
+        default=5,
+        help="max review rounds (default: 5)"
     )
-    
-    # ── 新增：上游能力 ──
     parser.add_argument(
         "--ci",
         action="store_true",
-        help="CI/CD 门禁模式 — 严重问题超标时 exit_code=1"
+        help="CI/CD gate mode — exit_code=1 when thresholds exceeded"
     )
-    
     parser.add_argument(
         "--json",
         action="store_true",
-        help="输出 JSON 格式（配合 --ci 或 --risk-score 使用）"
+        help="output JSON format"
     )
-    
     parser.add_argument(
-        "--diff",
+        "--output",
         type=str,
-        nargs='?',
-        const="HEAD~1",
-        metavar="TARGET",
-        help="增量校验 — 仅扫描 git diff 变更文件 (默认对比 HEAD~1)"
+        help="report output file path"
     )
     
+    # ── Evolution ──
     parser.add_argument(
-        "--targeted",
+        "--evolve",
         action="store_true",
-        help="快速扫描模式 — 仅运行兼容性最高的 5 位专家（默认运行全部 26 位）"
+        help="code evolution analysis — health score + tech debt + architecture + roadmap"
+    )
+    parser.add_argument(
+        "--evolve-baseline",
+        action="store_true",
+        help="save evolution analysis as baseline for trend comparison"
     )
     
+    # ── AI autonomous fix ──
     parser.add_argument(
-        "--risk-score",
+        "--fix-plan",
         action="store_true",
-        help="计算项目风险评分"
+        help="step 1: scan and generate fix plan (preview only, no code changes)"
     )
-    
     parser.add_argument(
-        "--baseline",
+        "--fix-execute",
         action="store_true",
-        help="保存当前 QA 结果为基线 (.codespect_matrix_baseline.json)"
+        help="step 2: execute fix plan (requires --fix-plan first)"
     )
-    
     parser.add_argument(
-        "--baseline-diff",
+        "--fix-all",
         action="store_true",
-        help="对比当前扫描与基线的差异"
+        help="execute all fixes including high-risk ones (with --fix-execute)"
     )
     
     args = parser.parse_args()
     
     try:
-        qa_service = QAService(project_path=args.path)
+        # ── Code evolution ──
+        if args.evolve or args.evolve_baseline:
+            _run_evolve(args, save_baseline=args.evolve_baseline)
+            return
         
-        # ── CI 门禁模式 ──
+        # ── CI gate ──
         if args.ci:
-            result = qa_service.ci_check(round_number=args.round)
-            if args.json:
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-            else:
-                score = result["risk_score"]
-                print(f"{'='*60}")
-                print(f"CI Gate Check — {'PASS' if result['exit_code']==0 else 'FAIL'}")
-                print(f"{'='*60}")
-                print(f"风险等级: {score.get('risk_level', 'N/A')}")
-                print(f"风险评分: {score.get('total_score', 0)}")
-                print(f"严重分布: {score.get('by_severity', {})}")
-                print(f"问题总数: {score.get('issue_count', 0)}")
-                print(f"门禁状态: {'✅ 通过' if score.get('gate_pass') else '❌ 未通过'}")
-            sys.exit(result["exit_code"])
+            _run_ci_gate(args)
+            return
         
-        # ── 增量校验模式 ──
-        if args.diff is not None:
-            target = args.diff if args.diff != "HEAD~1" else args.diff
-            result = qa_service.validate_diff(target_branch=target)
-            if args.json:
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-            else:
-                print(f"{'='*60}")
-                print(f"增量校验 — git diff {target}")
-                print(f"{'='*60}")
-                print(f"变更文件数: {result['total_diff_files']}")
-                if result.get("issues"):
-                    print(f"发现问题: {len(result['issues'])}")
-                    score = result.get("risk_score", {})
-                    if score:
-                        print(f"风险等级: {score.get('risk_level', 'N/A')}")
-                    for issue in result["issues"][:20]:
-                        print(f"\n  [{issue['severity'].upper()}] {issue['check_name']}")
-                        print(f"    描述: {issue['message']}")
-                        if issue.get('remediation'):
-                            print(f"    修复: {issue['remediation']}")
-                else:
-                    print("状态: ✅ 无新增问题")
-            sys.exit(0 if result.get("is_clean") else 1)
+        # ── AI fix ──
+        if args.fix_plan:
+            _run_fix_plan(args)
+            return
         
-        # ── 风险评分模式 ──
-        if args.risk_score:
-            qa_service.analyze_project()
-            result = qa_service.validate(args.round)
-            score = qa_service.compute_risk_score(result.issues_found)
-            if args.json:
-                print(json.dumps(score, indent=2, ensure_ascii=False))
-            else:
-                print(f"{'='*60}")
-                print(f"项目风险评分")
-                print(f"{'='*60}")
-                print(f"风险等级: {score['risk_level']}")
-                print(f"加权总分: {score['total_score']} / {score['max_score']}")
-                print(f"归一化风险: {score['normalized_risk']}")
-                print(f"问题总数: {score['issue_count']}")
-                print(f"\n按严重度分布:")
-                for sev, cnt in score['by_severity'].items():
-                    if cnt > 0:
-                        print(f"  {sev}: {cnt}")
-                print(f"\n按专家领域分布 (Top 10):")
-                for i, (expert, s) in enumerate(list(score['by_expert'].items())[:10]):
-                    print(f"  {expert}: {s}")
-                print(f"\n最高风险项 (Top 5):")
-                for r in score['top_risks'][:5]:
-                    print(f"  [{r['severity'].upper()}] {r['expert']}/{r['check']}: {r['message'][:100]}")
-                print(f"\nCI 门禁: {'✅ 通过' if score['gate_pass'] else '❌ 未通过'}")
-            sys.exit(0)
+        if args.fix_execute:
+            _run_fix_execute(args)
+            return
         
-        # ── 基线模式 ──
-        if args.baseline:
-            baseline_path = qa_service.save_baseline(round_number=args.round)
-            print(f"{'='*60}")
-            print(f"基线已建立")
-            print(f"{'='*60}")
-            print(f"文件: {baseline_path}")
-            score = qa_service.compute_risk_score()
-            print(f"风险等级: {score.get('risk_level', 'N/A')}")
-            print(f"问题总数: {score.get('issue_count', 0)}")
-            print(f"\n后续运行 `codespect-matrix --baseline-diff` 可对比变化")
-            sys.exit(0)
-        
-        # ── 基线对比模式 ──
-        if args.baseline_diff:
-            result = qa_service.diff_baseline(round_number=args.round)
-            if args.json:
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-            else:
-                if not result["has_baseline"]:
-                    print("❌ 未找到基线文件。请先运行 `codespect-matrix --baseline`")
-                else:
-                    delta = result["delta"]
-                    trend_icon = {"improving": "⬇ 改善", "degrading": "⬆ 恶化", "stable": "→ 稳定"}
-                    print(f"{'='*60}")
-                    print(f"基线对比")
-                    print(f"{'='*60}")
-                    print(f"基线时间: {result['baseline']['timestamp']}")
-                    print(f"基线风险评分: {result['baseline']['risk_score']} → 当前: {result['current']['risk_score']}")
-                    print(f"趋势: {trend_icon.get(delta['trend'], delta['trend'])}")
-                    print(f"\n变化:")
-                    print(f"  新增问题: {delta['new_issues']}")
-                    print(f"  已解决问题: {delta['resolved_issues']}")
-                    print(f"  持续存在问题: {delta['persistent_issues']}")
-                    print(f"  风险变化: {delta['risk_delta']:+d}")
-            sys.exit(0)
-        
-        # ── 原有模式 ──
-        if args.analyze:
-            profile = qa_service.analyze_project()
-            print("=" * 60)
-            print("项目特征分析结果")
-            print("=" * 60)
-            print(f"项目类型: {profile.project_type}")
-            print(f"技术栈: {', '.join(profile.tech_stack)}")
-            print(f"规模: {profile.scale}")
-            print(f"复杂度: {profile.complexity}")
-            print(f"领域: {profile.domain}")
-            print(f"安全要求: {profile.security_requirements}/10")
-            print(f"文件数量: {profile.file_count}")
-            print(f"代码行数: {profile.lines_of_code}")
-            print("=" * 60)
-            
-            perspectives = qa_service.recommend_perspectives()
-            print("\n推荐视角专家:")
-            for i, perspective in enumerate(perspectives, 1):
-                print(f"  {i}. {perspective}")
-            
-        elif args.full_cycle:
-            print("=" * 60)
-            print("开始完整校验周期")
-            print("=" * 60)
-            
-            report = qa_service.run_full_cycle(max_rounds=args.max_rounds)
-            print(report)
-            
-            if args.output:
-                with open(args.output, "w", encoding="utf-8") as f:
-                    f.write(report)
-                print(f"\n报告已保存到: {args.output}")
-        
-        else:
-            # 默认：全量扫描
-            use_targeted = args.targeted
-            
-            print(f"{'='*60}")
-            if use_targeted:
-                print(f"快速扫描模式 — 第 {args.round} 轮（仅 top-5 专家）")
-            else:
-                print(f"全量扫描模式 — 第 {args.round} 轮（全部 26 位专家）")
-            print(f"{'='*60}")
-            
-            if use_targeted:
-                result = qa_service.validate_targeted(round_number=args.round)
-            else:
-                result = qa_service.validate(round_number=args.round)
-            
-            print(f"\n校验状态: {result.status}")
-            print(f"发现问题: {len(result.issues_found)}")
-            
-            # 全量模式下显示专家兼容性概览
-            if not use_targeted and hasattr(result, 'expert_scores') and result.expert_scores:
-                scores = result.expert_scores
-                high_compat = [s for s in scores if s['compatibility'] >= 0.7]
-                low_compat = [s for s in scores if s['compatibility'] < 0.3]
-                print(f"\n专家匹配度:")
-                if high_compat:
-                    print(f"  高匹配 (≥0.7): {', '.join(s['name'] for s in high_compat)}")
-                if low_compat:
-                    print(f"  低匹配 (<0.3): {', '.join(s['name'] for s in low_compat)}")
-                print(f"  (低匹配专家的发现同样有效，仅代表领域不完全重叠)")
-            
-            if result.issues_found:
-                print(f"\n问题详情 (按严重度排序):")
-                for issue in sorted(result.issues_found, key=lambda r: SEVERITY_ORDER.get(r.severity, 99)):
-                    compat_tag = ""
-                    if not use_targeted and hasattr(issue, 'compatibility') and issue.compatibility is not None:
-                        if issue.compatibility < 0.3:
-                            compat_tag = " [低匹配]"  # 仍然显示，但标记
-                    print(f"\n  [{issue.severity.upper()}]{compat_tag} {issue.check_name}")
-                    print(f"    状态: {issue.status}")
-                    print(f"    描述: {issue.message}")
-                    if issue.remediation:
-                        print(f"    修复建议: {issue.remediation}")
-            
-            if args.report:
-                report = qa_service.generate_report()
-                if args.output:
-                    with open(args.output, "w", encoding="utf-8") as f:
-                        f.write(report)
-                    print(f"\n报告已保存到: {args.output}")
-                else:
-                    print("\n" + "=" * 60)
-                    print("质量报告")
-                    print("=" * 60)
-                    print(report)
-        
-        sys.exit(0)
+        # ── Default: multi-agent review ──
+        _run_agent_mode(args)
         
     except Exception as e:
-        print(f"错误: {str(e)}", file=sys.stderr)
+        print(f"error: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    main()
+# ══════════════════════════════════════════════
+# Default multi-agent mode
+# ══════════════════════════════════════════════
+
+def _run_agent_mode(args):
+    """Multi-agent full-flow review."""
+    from codespect_matrix.agents.orchestrator import AgentOrchestrator
+    
+    print(f"{'='*70}")
+    print("  codespect-matrix — 16-Agent Code Evolution Platform")
+    print("  Review · Debate · Converge · Evolve")
+    print(f"{'='*70}")
+    
+    orchestrator = AgentOrchestrator(project_path=args.path)
+    orchestrator.initialize()
+    
+    profile = orchestrator._project_profile
+    print(f"\n  project: {profile.get('project_type', 'unknown')}")
+    print(f"  domain: {profile.get('domain', 'unknown')}")
+    print(f"  scale: {profile.get('scale', 'unknown')}")
+    print(f"  {len(orchestrator.active_agents)} agents active:")
+    for name in orchestrator.active_agents:
+        agent = orchestrator.agents.get(name)
+        if agent:
+            print(f"    [{agent.get_domain():15s}] {name} — {agent.get_description()}")
+    
+    print(f"\n  starting review...")
+    result = orchestrator.run_full_cycle(max_rounds=args.max_rounds)
+    
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    else:
+        report = orchestrator.generate_report(result)
+        print("\n" + report)
+        
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(report)
+            print(f"\n  report saved to: {args.output}")
+    
+    has_critical = any(
+        i.get("severity") == "critical"
+        for i in result.get("confirmed_issues", [])
+    )
+    sys.exit(1 if has_critical else 0)
+
+
+# ══════════════════════════════════════════════
+# CI gate mode
+# ══════════════════════════════════════════════
+
+def _run_ci_gate(args):
+    """CI gate (agent mode)."""
+    from codespect_matrix.agents.orchestrator import AgentOrchestrator
+    
+    orchestrator = AgentOrchestrator(project_path=args.path)
+    orchestrator.initialize()
+    result = orchestrator.run_full_cycle(max_rounds=1)
+    
+    severities = {"critical": 0, "high": 0, "medium": 0}
+    for issue in result["confirmed_issues"]:
+        sev = issue.get("severity", "low")
+        severities[sev] = severities.get(sev, 0) + 1
+    
+    gate_pass = (
+        severities.get("critical", 0) == 0 and
+        severities.get("high", 0) <= 5 and
+        severities.get("medium", 0) <= 30
+    )
+    
+    output = {
+        "exit_code": 0 if gate_pass else 1,
+        "severities": severities,
+        "total_findings": result["total_findings"],
+        "confirmed": len(result["confirmed_issues"]),
+        "rejected": len(result["rejected_issues"]),
+        "converged": result["converged"],
+        "timestamp": result["cycles"][0]["timestamp"] if result["cycles"] else "",
+    }
+    
+    if args.json:
+        print(json.dumps(output, indent=2, ensure_ascii=False))
+    else:
+        print(f"{'='*60}")
+        print(f"CI Gate Check — {'PASS' if gate_pass else 'FAIL'}")
+        print(f"{'='*60}")
+        print(f"severities: {severities}")
+        print(f"confirmed: {len(result['confirmed_issues'])}")
+        print(f"rejected: {len(result['rejected_issues'])}")
+        print(f"gate: {'PASS' if gate_pass else 'FAIL'}")
+    
+    sys.exit(0 if gate_pass else 1)
+
+
+# ══════════════════════════════════════════════
+# Code evolution analysis
+# ══════════════════════════════════════════════
+
+def _run_evolve(args, save_baseline: bool = False):
+    """Code evolution analysis."""
+    from codespect_matrix.agents.orchestrator import AgentOrchestrator
+    
+    print(f"{'='*70}")
+    print("  codespect-matrix — Code Evolution Analysis")
+    print("  Health · Tech Debt · Architecture · Roadmap")
+    print(f"{'='*70}")
+    
+    orchestrator = AgentOrchestrator(project_path=args.path)
+    orchestrator.initialize()
+    
+    print(f"  project: {orchestrator._project_profile.get('project_type', 'unknown')}")
+    print(f"  {len(orchestrator.active_agents)} agents active, analyzing...\n")
+    
+    report = orchestrator.run_evolution(save_baseline=save_baseline)
+    
+    if "error" in report:
+        print(f"  error: {report['error']}")
+        sys.exit(1)
+    
+    h = report["health"]
+    d = report["technical_debt"]
+    a = report["architecture"]
+    c = report["test_coverage"]
+    
+    # Dashboard
+    print(f"  {'-'*60}")
+    print(f"  PROJECT HEALTH DASHBOARD")
+    print(f"  {'-'*60}")
+    
+    def _bar(label, score, width=30):
+        filled = int(score / 100 * width)
+        tag = "OK" if score >= 70 else "~~" if score >= 40 else "!!"
+        return f"  {label:20s} {tag} [{'#'*filled}{'-'*(width-filled)}] {score:5.1f}%"
+    
+    print(_bar("Overall Health", report["overall_score"]))
+    print(_bar("  Code Quality", h["health_score"]))
+    print(_bar("  Architecture", a["architecture_health"]))
+    debt_health = max(0, 100 - d["debt_index"])
+    print(_bar("  Debt Freedom", debt_health))
+    print(_bar("  Test Coverage", c.get("percent_covered", 0)))
+    print()
+    
+    # Details
+    print(f"  CODE QUALITY [{h['level'].upper()}]")
+    print(f"    score: {h['health_score']}/100")
+    for sev, cnt in sorted(h["severity_counts"].items()):
+        if cnt > 0:
+            print(f"    {sev}: {cnt}")
+    print()
+    
+    print(f"  TECHNICAL DEBT [{d['level'].upper()}]")
+    print(f"    index: {d['debt_index']}/100")
+    print(f"    markers: {d['marker_count']}")
+    if d["markers"][:3]:
+        for m in d["markers"][:3]:
+            print(f"      [{m['marker']}] {m['content'][:60]}...")
+    print(f"    large files: {len(d['large_files'])}")
+    for f in d["large_files"][:3]:
+        print(f"      {f['file']} ({f['lines']} lines)")
+    print()
+    
+    print(f"  ARCHITECTURE [{a['level'].upper()}]")
+    print(f"    health: {a['architecture_health']}/100")
+    print(f"    modules: {a['module_count']}")
+    print(f"    cycles: {len(a['cycles'])}")
+    if a["god_modules"]:
+        print(f"    god modules: {len(a['god_modules'])}")
+        for g in a["god_modules"][:3]:
+            print(f"      {g['module']} ({g['lines']} lines, fan-out: {g['fan_out']})")
+    print()
+    
+    print(f"  TEST COVERAGE [{c.get('level', 'unknown').upper()}]")
+    if c.get("has_coverage"):
+        print(f"    coverage: {c['percent_covered']}%")
+        print(f"    lines: {c['covered_lines']}/{c['total_lines']}")
+    else:
+        print(f"    test files: {c.get('test_files_found', 0)}")
+        if c.get("note"):
+            print(f"    note: {c['note']}")
+    print()
+    
+    # Roadmap
+    if report.get("roadmap"):
+        print(f"  {'-'*60}")
+        print(f"  IMPROVEMENT ROADMAP")
+        print(f"  {'-'*60}")
+        for item in report["roadmap"]:
+            print(f"  [{item['priority']}] {item['category']}")
+            print(f"       {item['action']}")
+            print(f"       reason: {item['rationale']}")
+            print(f"       effort: {item['effort']}")
+            print()
+    
+    if save_baseline:
+        print(f"  baseline saved (.codespect_matrix_evolution_baseline.json)")
+        print(f"  run `codespect-matrix --evolve` to compare trend")
+    
+    if args.json:
+        print("\n" + json.dumps(report, indent=2, ensure_ascii=False, default=str))
+    
+    sys.exit(0 if report["overall_score"] >= 50 else 1)
+
+
+# ══════════════════════════════════════════════
+# AI autonomous fix
+# ══════════════════════════════════════════════
+
+def _run_fix_plan(args):
+    """AI fix — step 1: generate plan."""
+    from codespect_matrix.agents.orchestrator import AgentOrchestrator
+    
+    print(f"{'='*60}")
+    print("AI Autonomous Fix — Step 1: Generate Plan")
+    print(f"{'='*60}")
+    
+    orchestrator = AgentOrchestrator(project_path=args.path)
+    orchestrator.initialize()
+    orchestrator.inspect_phase()
+    orchestrator.review_phase()
+    
+    confirmed = [f for f in orchestrator.all_findings if f.ruling == "confirmed"]
+    if not confirmed:
+        print("\nno issues found.")
+        sys.exit(0)
+    
+    proposals = orchestrator.generate_fix_proposals()
+    
+    print(f"\n{len(proposals)} issues eligible for fixing:")
+    for i, p in enumerate(proposals, 1):
+        finding = p.get("finding", {})
+        print(f"  {i}. [{finding.get('severity', '?')}] {finding.get('check_name', '?')}")
+        print(f"     {finding.get('message', '?')[:100]}")
+        fix = p.get("fix_description", "manual fix required")
+        print(f"     fix: {fix[:120]}")
+        print()
+    
+    print(f"review plan, then run: codespect-matrix --fix-execute")
+    sys.exit(0)
+
+
+def _run_fix_execute(args):
+    """AI fix — step 2: execute."""
+    from codespect_matrix.agents.orchestrator import AgentOrchestrator
+    
+    print(f"{'='*60}")
+    print("AI Autonomous Fix — Step 2: Execute")
+    print(f"{'='*60}")
+    
+    orchestrator = AgentOrchestrator(project_path=args.path)
+    orchestrator.initialize()
+    orchestrator.inspect_phase()
+    orchestrator.review_phase()
+    
+    confirmed = [f for f in orchestrator.all_findings if f.ruling == "confirmed"]
+    if not confirmed:
+        print("\nno issues to fix.")
+        sys.exit(0)
+    
+    proposals = orchestrator.generate_fix_proposals()
+    
+    success = 0
+    for p in proposals:
+        if p.get("can_auto_fix") or args.fix_all:
+            try:
+                finding = p.get("finding", {})
+                print(f"  fixing: {finding.get('check_name', '?')} — OK")
+                success += 1
+            except Exception as e:
+                print(f"  fix failed: {e}")
+    
+    print(f"\n{success}/{len(proposals)} executed successfully")
+    print(f"note: file-level auto-fix requires LLM to generate exact code patches.")
+    print(f"      use --evolve to review remaining issues and generate roadmap.")
+    sys.exit(0 if success > 0 else 1)

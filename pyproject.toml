@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codespect-matrix"
-version = "4.0.0"
-description = "AI驱动的智能多视角质量校验引擎 — 26位视角专家全量扫描 + CI门禁 + 风险评分 + 增量diff + 基线对比"
+version = "1.0.0"
+description = "codespect-matrix — 16-Agent Code Evolution Platform · Debate Review · Hybrid Engine · Health Scoring"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     { name = "周良", email = "zhouliang@shsmu.edu.cn" }
 ]
-keywords = ["qa", "quality", "testing", "validation", "code-review", "ci-cd", "risk-scoring", "healthcare", "phi", "privacy", "llm", "ai"]
+keywords = ["qa", "quality", "testing", "validation", "code-review", "ci-cd", "risk-scoring", "healthcare", "phi", "privacy", "llm", "ai", "multi-agent", "agent", "evolution", "debate-review", "tech-debt"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
