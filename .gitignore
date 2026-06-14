@@ -73,3 +73,4 @@ Thumbs.db
 
 # Docs (internal only, not for public repo)
 RELEASE_GUIDE.md
+RELEASE_NOTES*.md
