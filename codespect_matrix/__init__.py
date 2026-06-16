@@ -60,6 +60,9 @@ from .evolution import (
     SelfEvolver,
 )
 
+# Fix engine
+from .fix_engine import FixEngine, FixResult, run_fix_cycle
+
 __all__ = [
     # Core
     "ProjectScanner", "ProjectProfile",
@@ -74,4 +77,6 @@ __all__ = [
     "HealthScorer", "TechDebtAnalyzer", "ArchitectureAnalyzer",
     "TestCoverageEstimator", "EvolutionReporter", "EvolutionBaseline",
     "SelfEvolver",
+    # Fix engine
+    "FixEngine", "FixResult", "run_fix_cycle",
 ]

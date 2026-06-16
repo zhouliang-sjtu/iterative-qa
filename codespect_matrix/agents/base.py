@@ -193,13 +193,21 @@ class BaseAgent(ABC):
 
     # ── Phase 4: Fix generation ──
     def propose_fix(self, finding: Finding) -> Dict[str, Any]:
-        """Generate a fix proposal for a confirmed finding."""
+        """Generate a fix proposal for a confirmed finding.
+
+        Findings with file_path and line info are marked auto-fixable;
+        FixEngine will generate the actual code patch via LLM.
+        """
+        file_path = finding.file_path
+        has_location = bool(file_path and (finding.line_start > 0 or finding.evidence))
         return {
             "finding": finding.to_dict(),
             "fix_description": finding.remediation or "Manual review required",
-            "can_auto_fix": False,
-            "file_path": finding.file_path,
-            "old_code": "",
+            "can_auto_fix": has_location,
+            "file_path": file_path,
+            "line_start": finding.line_start,
+            "line_end": finding.line_end,
+            "old_code": finding.evidence or "",
             "new_code": "",
         }
 

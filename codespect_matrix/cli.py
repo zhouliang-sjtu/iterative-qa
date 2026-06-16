@@ -2,7 +2,9 @@
 
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 from typing import Optional
 
 
@@ -337,72 +339,184 @@ def _run_evolve(args, save_baseline: bool = False):
 # ══════════════════════════════════════════════
 
 def _run_fix_plan(args):
-    """AI fix — step 1: generate plan."""
+    """AI fix — step 1: scan project and generate a fix plan.
+
+    Displays confirmed issues with fix descriptions. User reviews,
+    then runs --fix-execute to apply changes.
+    """
     from codespect_matrix.agents.orchestrator import AgentOrchestrator
-    
+    from codespect_matrix.evolution import HealthScorer
+
     print(f"{'='*60}")
-    print("AI Autonomous Fix — Step 1: Generate Plan")
+    print("  codespect-matrix — AI Autonomous Fix: Generate Plan")
     print(f"{'='*60}")
-    
+
     orchestrator = AgentOrchestrator(project_path=args.path)
     orchestrator.initialize()
     orchestrator.inspect_phase()
     orchestrator.review_phase()
-    
+
     confirmed = [f for f in orchestrator.all_findings if f.ruling == "confirmed"]
     if not confirmed:
-        print("\nno issues found.")
-        sys.exit(0)
-    
+        print("\n  no issues found — project is clean.")
+        return
+
+    # Health before fix
+    scorer = HealthScorer()
+    before = scorer.compute([f.to_dict() for f in confirmed])
+    before_score = before.get("health_score", 0)
+
     proposals = orchestrator.generate_fix_proposals()
-    
-    print(f"\n{len(proposals)} issues eligible for fixing:")
-    for i, p in enumerate(proposals, 1):
-        finding = p.get("finding", {})
-        print(f"  {i}. [{finding.get('severity', '?')}] {finding.get('check_name', '?')}")
-        print(f"     {finding.get('message', '?')[:100]}")
-        fix = p.get("fix_description", "manual fix required")
-        print(f"     fix: {fix[:120]}")
-        print()
-    
-    print(f"review plan, then run: codespect-matrix --fix-execute")
-    sys.exit(0)
+    auto_fixable = [p for p in proposals if p.get("can_auto_fix", False)]
+    manual = [p for p in proposals if not p.get("can_auto_fix", False)]
+
+    print(f"\n  Health score (before): {before_score}/100")
+    print(f"  Confirmed issues:     {len(confirmed)}")
+    print(f"  Auto-fixable:         {len(auto_fixable)}")
+    print(f"  Needs manual review:  {len(manual)}")
+    print()
+
+    if auto_fixable:
+        print("  Auto-fixable issues:")
+        print("  " + "-" * 52)
+        for i, p in enumerate(auto_fixable, 1):
+            f = p.get("finding", {})
+            sev = f.get("severity", "?")
+            line = f.get("line_start", 0)
+            filepath = f.get("file_path", "")
+            msg = f.get("message", "?")[:80]
+            label = "C" if sev == "critical" else "H" if sev == "high" else "M" if sev == "medium" else "L"
+            print(f"  [{label}] {f.get('check_name', '?')}")
+            print(f"       {msg}")
+            if filepath and line:
+                print(f"       {filepath}:{line}")
+            fix_desc = p.get("fix_description", "")[:100]
+            print(f"       fix: {fix_desc}")
+            print()
+
+    if manual:
+        print(f"  Manual review needed ({len(manual)} issues):")
+        print("  " + "-" * 52)
+        for i, p in enumerate(manual, 1):
+            f = p.get("finding", {})
+            print(f"  {i}. [{f.get('severity', '?')}] {f.get('check_name', '?')}")
+            print(f"     {f.get('message', '?')[:100]}")
+            print(f"     {p.get('fix_description', '?')[:120]}")
+            print()
+
+    print(f"  To apply auto-fixes:   codespect-matrix --fix-execute")
+    print(f"  To apply ALL fixes:    codespect-matrix --fix-execute --fix-all")
+    print(f"  (backups saved to .codespect_matrix_backups/)")
 
 
 def _run_fix_execute(args):
-    """AI fix — step 2: execute."""
+    """AI fix — step 2: apply fixes and verify improvement."""
     from codespect_matrix.agents.orchestrator import AgentOrchestrator
-    
+    from codespect_matrix.evolution import HealthScorer
+    from codespect_matrix.fix_engine import FixEngine
+    from codespect_matrix.llm_service import LLMService
+
     print(f"{'='*60}")
-    print("AI Autonomous Fix — Step 2: Execute")
+    print("  codespect-matrix — AI Autonomous Fix: Execute")
     print(f"{'='*60}")
-    
+
     orchestrator = AgentOrchestrator(project_path=args.path)
     orchestrator.initialize()
     orchestrator.inspect_phase()
     orchestrator.review_phase()
-    
+
     confirmed = [f for f in orchestrator.all_findings if f.ruling == "confirmed"]
     if not confirmed:
-        print("\nno issues to fix.")
-        sys.exit(0)
-    
+        print("\n  no issues to fix.")
+        return
+
+    # Health before
+    scorer = HealthScorer()
+    before = scorer.compute([f.to_dict() for f in confirmed])
+    before_score = before.get("health_score", 0)
+    print(f"\n  Health before fix:  {before_score}/100")
+    print(f"  Issues to address:  {len(confirmed)}")
+
     proposals = orchestrator.generate_fix_proposals()
-    
-    success = 0
-    for p in proposals:
-        if p.get("can_auto_fix") or args.fix_all:
-            try:
-                finding = p.get("finding", {})
-                print(f"  fixing: {finding.get('check_name', '?')} — OK")
-                success += 1
-            except Exception as e:
-                print(f"  fix failed: {e}")
-    
-    print(f"\n{success}/{len(proposals)} executed successfully")
-    print(f"note: file-level auto-fix requires LLM to generate exact code patches.")
-    print(f"      use --evolve to review remaining issues and generate roadmap.")
-    sys.exit(0 if success > 0 else 1)
+    llm = None
+    try:
+        llm = LLMService()
+    except Exception:
+        print("  (no LLM configured — rule-based fixes only)")
+
+    # Apply fixes
+    engine = FixEngine(args.path, llm)
+    results = engine.execute_fixes(proposals, fix_all=args.fix_all)
+    summary = engine.get_fix_summary()
+
+    print(f"\n  Fix results:")
+    print(f"    Applied:  {summary['applied']}")
+    print(f"    Failed:   {summary['failed']}")
+
+    if summary["files_changed"]:
+        print(f"\n  Files modified:")
+        for f in summary["files_changed"]:
+            rel = os.path.relpath(f, args.path) if os.path.isabs(f) else f
+            print(f"    - {rel}")
+        print(f"\n  Backups saved to: {os.path.relpath(engine.backup_dir, args.path)}")
+
+    if summary["failed"] > 0:
+        print(f"\n  Failed fixes:")
+        for r in results:
+            if not r.success:
+                print(f"    - {r.check_name}: {r.error}")
+
+    # Re-scan to verify
+    if summary["applied"] > 0:
+        print(f"\n  Re-scanning to verify...")
+        orchestrator.all_findings = []
+        orchestrator.inspect_phase()
+        orchestrator.review_phase()
+        after_confirmed = [f for f in orchestrator.all_findings
+                           if f.ruling == "confirmed"]
+        after_score = scorer.compute(
+            [f.to_dict() for f in after_confirmed]
+        ).get("health_score", 0)
+
+        delta = round(after_score - before_score, 1)
+        print(f"  Health after fix:   {after_score}/100")
+        print(f"  Improvement:        {delta:+}")
+
+        # Record in SelfEvolver
+        try:
+            from codespect_matrix.evolution import SelfEvolver
+            evolver = SelfEvolver()
+            evolver.record_qa_cycle(
+                project_name=Path(args.path).name,
+                before_health=before_score,
+                findings=[r.to_dict() for r in results],
+                fixes_applied=[
+                    {"check_name": r.check_name, "success": r.success}
+                    for r in results
+                ],
+                after_health=after_score,
+                fix_details=[
+                    {
+                        "check_name": r.check_name,
+                        "reasoning": r.reasoning,
+                        "old_code": r.patch.get("old_str", "")[:200],
+                        "new_code": r.patch.get("new_str", "")[:200],
+                    }
+                    for r in results if r.success and r.reasoning
+                ],
+            )
+            print(f"  SelfEvolver:        cycle recorded for future learning")
+        except Exception:
+            pass
+
+    if args.json:
+        output = {
+            "before_health": before_score,
+            "after_health": after_score if summary["applied"] > 0 else None,
+            "fix_summary": summary,
+        }
+        import json as _json
+        print("\n" + _json.dumps(output, indent=2, ensure_ascii=False, default=str))
 
 
 # ══════════════════════════════════════════════
