@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codespect-matrix"
-version = "1.0.0"
-description = "codespect-matrix — 16-Agent Code Evolution Platform · QA Self-Evolving · Debate Review · Hybrid Engine · Health Scoring"
+version = "2.0.0"
+description = "codespect-matrix — Multi-Agent Code Evolution Platform · CPG Taint Analysis · 10-Stage Pipeline · Debate Review · Health Scoring"
 readme = "README.md"
 license = "MIT"
 authors = [

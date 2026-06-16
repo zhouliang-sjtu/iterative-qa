@@ -66,6 +66,7 @@ class ProjectScanner:
     def scan(self, project_path: str) -> ProjectProfile:
         """扫描项目并提取特征"""
         features = self._extract_features(project_path)
+        dynamic_features = self._detect_dynamic_analysis_features(project_path, features["files"])
         
         return ProjectProfile(
             project_type=features["project_type"],
@@ -76,6 +77,17 @@ class ProjectScanner:
             security_requirements=features["security_requirements"],
             file_count=features["file_count"],
             lines_of_code=features["lines_of_code"],
+            # Dynamic analysis features
+            has_database=dynamic_features["has_database"],
+            database_type=dynamic_features["database_type"],
+            database_url_available=dynamic_features["database_url_available"],
+            has_api_framework=dynamic_features["has_api_framework"],
+            has_openapi_schema=dynamic_features["has_openapi_schema"],
+            api_endpoints_count=dynamic_features["api_endpoints_count"],
+            service_running=dynamic_features["service_running"],
+            service_port=dynamic_features["service_port"],
+            has_sqlalchemy=dynamic_features["has_sqlalchemy"],
+            has_orm_models=dynamic_features["has_orm_models"],
         )
     
     def _extract_features(self, project_path: str) -> Dict[str, Any]:
@@ -109,6 +121,7 @@ class ProjectScanner:
             "security_requirements": security_requirements,
             "file_count": file_count,
             "lines_of_code": lines_of_code,
+            "files": files,  # 新增：保留文件列表供后续动态分析
         }
     
     def _get_all_files(self, project_path: str) -> List[str]:
@@ -266,3 +279,134 @@ class ProjectScanner:
             score += 1
         
         return min(10, max(1, score))
+    
+    def _detect_dynamic_analysis_features(self, project_path: str, files: List[str]) -> Dict[str, Any]:
+        """检测动态分析相关特征（数据库、API框架、服务状态等）"""
+        features = {
+            "has_database": False,
+            "database_type": "",
+            "database_url_available": False,
+            "has_api_framework": False,
+            "has_openapi_schema": False,
+            "api_endpoints_count": 0,
+            "service_running": False,
+            "service_port": 0,
+            "has_sqlalchemy": False,
+            "has_orm_models": False,
+        }
+        
+        # ─── 1. 检测数据库配置 ────────────────────────────────────────────
+        db_patterns = {
+            "postgresql": ["postgresql", "postgres", "psycopg"],
+            "mysql": ["mysql", "mysqldb", "pymysql"],
+            "sqlite": ["sqlite", "sqlite3"],
+            "mongodb": ["mongodb", "mongo", "pymongo"],
+        }
+        
+        # 检查 .env 文件和配置文件
+        env_files = [f for f in files if f.endswith('.env') or '.env.' in os.path.basename(f)]
+        config_files = [f for f in files if os.path.basename(f) in ['config.py', 'settings.py', 'config.yaml', 'config.json']]
+        
+        for filepath in env_files + config_files:
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read().lower()
+                    if 'database_url' in content or 'db_url' in content:
+                        features["has_database"] = True
+                        features["database_url_available"] = True
+                        for db_type, patterns in db_patterns.items():
+                            if any(p in content for p in patterns):
+                                features["database_type"] = db_type
+                                break
+            except:
+                pass
+        
+        # 检查 requirements.txt / pyproject.toml
+        dep_files = [f for f in files if os.path.basename(f) in ['requirements.txt', 'pyproject.toml', 'setup.py']]
+        for filepath in dep_files:
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read().lower()
+                    if 'sqlalchemy' in content:
+                        features["has_sqlalchemy"] = True
+                        features["has_database"] = True
+                    if not features["database_type"]:
+                        for db_type, patterns in db_patterns.items():
+                            if any(p in content for p in patterns):
+                                features["database_type"] = db_type
+                                break
+            except:
+                pass
+        
+        # ─── 2. 检测 ORM Model 定义 ────────────────────────────────────────
+        model_files = [f for f in files if 'model' in f.lower() and f.endswith('.py')]
+        for filepath in model_files:
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    # 检测 SQLAlchemy Model 定义
+                    if re.search(r'class\s+\w+\s*\(\s*Base\s*\)', content) or \
+                       re.search(r'\bColumn\s*\(', content) or \
+                       re.search(r'\bdeclarative_base\b', content):
+                        features["has_orm_models"] = True
+                        features["has_sqlalchemy"] = True
+                        break
+            except:
+                pass
+        
+        # ─── 3. 检测 API 框架 ──────────────────────────────────────────────
+        api_patterns = {
+            "FastAPI": ["fastapi", "from fastapi import", "APIRouter", "@app.get", "@app.post"],
+            "Flask": ["flask", "from flask import", "@app.route"],
+            "DjangoREST": ["django", "rest_framework", "APIView", "serializers"],
+        }
+        
+        py_files = [f for f in files if f.endswith('.py')]
+        endpoint_count = 0
+        
+        for filepath in py_files:
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    for api_name, patterns in api_patterns.items():
+                        if any(p in content for p in patterns):
+                            features["has_api_framework"] = True
+                            break
+                    # 统计端点数量
+                    endpoint_count += len(re.findall(r'@(app|router)\.(get|post|put|delete|patch)\s*\(', content))
+                    endpoint_count += len(re.findall(r'@app\.route\s*\(', content))
+            except:
+                pass
+        
+        features["api_endpoints_count"] = endpoint_count
+        
+        # ─── 4. 检测 OpenAPI Schema ────────────────────────────────────────
+        openapi_files = [f for f in files if 'openapi' in f.lower() or f.endswith('.json')]
+        for filepath in openapi_files:
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    if '"openapi"' in content or '"paths"' in content:
+                        features["has_openapi_schema"] = True
+                        break
+            except:
+                pass
+        
+        # ─── 5. 检测服务运行状态 ───────────────────────────────────────────
+        # 尝试探测常见端口
+        common_ports = [8000, 5000, 3000, 8080, 8888]
+        import socket
+        for port in common_ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)
+                result = sock.connect_ex(('localhost', port))
+                if result == 0:
+                    features["service_running"] = True
+                    features["service_port"] = port
+                    break
+                sock.close()
+            except:
+                pass
+        
+        return features

@@ -1,4 +1,4 @@
-"""codespect-matrix — Multi-Agent Code Evolution Platform"""
+"""codespect-matrix — Multi-Agent Code Evolution Platform with Deep Taint Analysis"""
 
 from setuptools import setup, find_packages
 
@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="codespect-matrix",
-    version="1.0.0",
+    version="2.0.0",
     author="周良",
     author_email="zhouliang@shsmu.edu.cn",
     description="codespect-matrix — 16-Agent Code Evolution Platform · QA Self-Evolving · Debate Review · Hybrid Engine · Health Scoring",

@@ -1,25 +1,31 @@
-"""codespect-matrix — 16-Agent Code Evolution Platform
+"""codespect-matrix — Multi-Agent Code Evolution Platform with Deep Taint Analysis
 
-Debate Review · Hybrid Engine · Code Evolution
-
-The 16-agent QA team that doesn't just find bugs — it measures code health,
-tracks technical debt, analyzes architecture, and generates improvement roadmaps.
+CPG Analysis · 10-Stage Pipeline · Debate Review · Harness Engineering · Self-Evolution
 
 Key Features:
-- 16 specialized agents: Security, Healthcare, PHI, Architecture,
-  Performance, DevOps, Testing, Linter, Data Science, Hardcode detection
-- 5-phase review: Inspect → Cross-review → Debate → Converge → Fix
-- Hybrid engine: Rule+LLM for security/healthcare; pure LLM for others
-- Dual memory: Project-level + Global KB (cross-project learning)
-- AI autonomous fix: Scan → fix plan → user confirm → execute
-- Code evolution: Health scoring · Technical debt · Architecture analysis ·
-  Test coverage · Improvement roadmap
+- 20+ specialized agents: Security, Healthcare, PHI, FHIR, DICOM, HL7, CDS,
+  Compliance, Architecture, Performance, DevOps, Testing, Linter, Data Science,
+  Hardcode, Concurrency, API, Dependency, DB Compatibility, DB Schema,
+  API Contract, Smoke Test
+- 10-stage pipeline: CPG Deep Taint → Agent Selection → Parallel Inspection →
+  Harness Validation → Cross-Review → Harness Verification → Debate Arbitration →
+  Convergence Detection → Drift Detection → Fix Generation → Evolution Report
+- CPG (Code Property Graph) pre-scan: AST + Call Graph + Data Flow + Taint
+  Analysis, pure Python, zero external dependencies
+- Harness Engineering: Constraint enforcement, cross-phase verification,
+  feedback routing, automatic recovery, drift detection
+- Dynamic Analysis: DB schema consistency, API contract validation, smoke testing
+- Debate validation: Multi-round cross-examination with confidence thresholds
+- Hybrid engine: Rule engine + LLM reasoning + CPG taint analysis
+- Dual memory: ProjectMemory + GlobalKnowledgeBase (cross-project learning)
+- Self-Evolution: QA → Fix → ReQA → Learn closed loop
+- Code evolution: Health score · Technical debt · Architecture health · Roadmap
 
 Usage:
-    # Default multi-agent review
+    # Default multi-agent review (10-stage pipeline)
     codespect-matrix
 
-    # Code evolution analysis (health + debt + architecture)
+    # Code evolution analysis
     codespect-matrix --evolve
 
     # Full review with JSON output
@@ -35,7 +41,7 @@ Usage:
     result = orch.run_full_cycle()
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "周良"
 __organization__ = "上海交通大学医学院"
 

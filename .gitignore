@@ -76,5 +76,19 @@ Thumbs.db
 RELEASE_GUIDE.md
 RELEASE_NOTES*.md
 
+# Article / Research (IP-sensitive, not for public repo)
+article/
+
 # Trae IDE skills (local only)
 .trae/
+
+# Research engine data (local experiments, IP-sensitive)
+article/research_engine/research_data/
+article/research_engine/comparison_output/
+*.db
+*.experiment.json
+*.comparison.json
+*_findings.json
+experiment_output/
+comparison_output/
+!article/research_engine/research_data/.gitkeep

@@ -126,7 +126,18 @@ class ProjectProfile:
     security_requirements: int  # 0-10
     file_count: int
     lines_of_code: int
-    
+    # Dynamic analysis features (新增)
+    has_database: bool = False  # 是否有数据库配置
+    database_type: str = ""     # postgresql / mysql / sqlite / mongodb
+    database_url_available: bool = False  # DATABASE_URL 是否可获取
+    has_api_framework: bool = False  # FastAPI / Flask / Django REST
+    has_openapi_schema: bool = False  # openapi.json 是否存在
+    api_endpoints_count: int = 0  # API 端点数量估计
+    service_running: bool = False  # 服务是否正在运行
+    service_port: int = 0  # 服务端口
+    has_sqlalchemy: bool = False  # 是否使用 SQLAlchemy
+    has_orm_models: bool = False  # 是否有 ORM Model 定义
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "project_type": self.project_type,
@@ -137,6 +148,16 @@ class ProjectProfile:
             "security_requirements": self.security_requirements,
             "file_count": self.file_count,
             "lines_of_code": self.lines_of_code,
+            "has_database": self.has_database,
+            "database_type": self.database_type,
+            "database_url_available": self.database_url_available,
+            "has_api_framework": self.has_api_framework,
+            "has_openapi_schema": self.has_openapi_schema,
+            "api_endpoints_count": self.api_endpoints_count,
+            "service_running": self.service_running,
+            "service_port": self.service_port,
+            "has_sqlalchemy": self.has_sqlalchemy,
+            "has_orm_models": self.has_orm_models,
         }
 
 

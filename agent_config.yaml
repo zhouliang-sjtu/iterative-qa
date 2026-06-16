@@ -1,5 +1,5 @@
 # =============================================================================
-# codespect-matrix v1.0.0 — Agent Runtime Configuration
+# codespect-matrix v2.0.0 — Agent Runtime Configuration
 # =============================================================================
 # Each section is read by AgentOrchestrator at initialization.
 
@@ -10,7 +10,7 @@ agent_selection:
   # When strategy=profile_matching: minimum compatibility score to activate an agent (0.0-1.0)
   min_compatibility: 0.3
   # Max agents per round (parallelism budget)
-  max_active: 8
+  max_active: 16  # Increased to accommodate dynamic analysis agents
 
 # ─── Inspection Phase ─────────────────────────────────────────────────────────
 inspection:

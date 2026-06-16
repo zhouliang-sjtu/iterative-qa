@@ -1,13 +1,17 @@
 """AgentOrchestrator — multi-agent workflow coordinator.
 
 Pipeline:
+0. CPG pre-scan — Deep taint analysis (AST + data flow)
 1. Project analysis → Agent selection (profile + global KB recommendation)
 2. Parallel inspection → All agents discover issues independently
-3. Cross-review → Each finding reviewed by agents from different domains
-4. Debate ruling → Disputed findings enter debate
-5. Convergence detection → Terminate when no new findings
-6. Fix generation → Confirmed issues generate fix proposals
-7. Evolution report → Health score + technical debt + architecture + roadmap
+3. Harness validate — Constraint enforcement on inspect findings
+4. Cross-review → Each finding reviewed by agents from different domains
+5. Harness verify — Verification loop on review results
+6. Debate ruling → Disputed findings enter debate
+7. Convergence detection → Terminate when no new findings
+8. Drift detection → Quality trend analysis
+9. Fix generation → Confirmed issues generate fix proposals
+10. Evolution report → Health score + technical debt + architecture + roadmap
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from __future__ import annotations
 import os
 import yaml
 import uuid
+from collections import Counter
 from datetime import datetime, UTC
 from typing import Dict, List, Any, Optional
 
@@ -23,11 +28,14 @@ from .base import (
 )
 from .bus import AgentCommunicationBus
 from .memory import ProjectMemory, GlobalKnowledgeBase
+from .harness import HarnessEngine
+from .cpg_analyzer import CPGAnalyzer, taint_to_rule_findings
 from .rule_agents import (
     SecurityAgent, HealthcareAgent, PHIAgent, ComplianceAgent, MedicalDataAgent,
     FHIRAgent, DICOMAgent, HL7Agent, CDSRulesAgent,
 )
 from .llm_agents import LLM_AGENT_CLASSES
+from .dynamic_agents import DYNAMIC_AGENT_CLASSES
 
 try:
     from ..llm_service import get_llm_service, LLMService
@@ -60,6 +68,7 @@ class AgentOrchestrator:
         self.bus = AgentCommunicationBus()
         self.project_memory = ProjectMemory(project_path)
         self.global_kb = GlobalKnowledgeBase()
+        self.harness = HarnessEngine()  # Harness Engineering layer
 
         # Agent management
         self.agents: Dict[str, BaseAgent] = {}
@@ -177,8 +186,35 @@ class AgentOrchestrator:
             if a not in self.active_agents and a in self.agents:
                 self.active_agents.append(a)
 
+        # ─── Dynamic analysis agents (智能自动激活) ─────────────────────────────
+        # These are inserted at the front of the list to ensure they're not sliced off
+        dynamic_agents_to_activate = []
+        
+        # DBCompatibilityAgent: 有数据库配置就激活（纯静态，无需连接）
+        if profile.get("has_database") or profile.get("has_sqlalchemy"):
+            if "db_compatibility" not in self.active_agents and "db_compatibility" in self.agents:
+                dynamic_agents_to_activate.append("db_compatibility")
+
+        # DBSchemaAgent: 有 SQLAlchemy + 数据库连接才激活
+        if profile.get("has_sqlalchemy") and profile.get("database_url_available"):
+            if "db_schema" not in self.active_agents and "db_schema" in self.agents:
+                dynamic_agents_to_activate.append("db_schema")
+
+        # APIContractAgent: 有 API 框架就激活（可静态分析 OpenAPI Schema）
+        if profile.get("has_api_framework") or profile.get("has_openapi_schema"):
+            if "api_contract" not in self.active_agents and "api_contract" in self.agents:
+                dynamic_agents_to_activate.append("api_contract")
+
+        # SmokeTestAgent: 服务正在运行才激活
+        if profile.get("service_running"):
+            if "smoke_test" not in self.active_agents and "smoke_test" in self.agents:
+                dynamic_agents_to_activate.append("smoke_test")
+
+        # Insert dynamic agents at the beginning to ensure they're included
+        self.active_agents = dynamic_agents_to_activate + self.active_agents
+
         # Honor config max_active
-        max_active = self._cfg("agent_selection", "max_active", default=8)
+        max_active = self._cfg("agent_selection", "max_active", default=16)  # Increased for dynamic agents
         self.active_agents = self.active_agents[:max_active]
 
     def _register_all_agents(self):
@@ -204,6 +240,11 @@ class AgentOrchestrator:
         # LLM agents (includes new: linter, datascience, hardcode)
         for name, cls in LLM_AGENT_CLASSES.items():
             agent = cls(name=name, role=AgentRole.INSPECTOR, llm_service=self.llm)
+            self._add_agent(name, agent)
+
+        # Dynamic analysis agents (runtime-aware)
+        for name, cls in DYNAMIC_AGENT_CLASSES.items():
+            agent = cls(name=name, bus=self.bus, memory=self.project_memory)
             self._add_agent(name, agent)
 
     def _add_agent(self, name: str, agent: BaseAgent):
@@ -295,7 +336,72 @@ class AgentOrchestrator:
                 )
 
         self.all_findings = all_findings
-        return len(all_findings)
+
+        # CPG pre-scan: deep taint analysis
+        cpg_findings = self._cpg_scan()
+        self.all_findings = cpg_findings + self.all_findings
+
+        return len(self.all_findings)
+
+    def _cpg_scan(self) -> List[Finding]:
+        """Run Code Property Graph deep analysis on project files."""
+        try:
+            import glob as glob_mod
+
+            cpg = CPGAnalyzer()
+            file_map: Dict[str, str] = {}
+
+            for filepath in glob_mod.glob(
+                os.path.join(self.project_path, "**", "*.py"), recursive=True,
+            ):
+                relpath = os.path.relpath(filepath, self.project_path)
+                if "agents" in relpath.split(os.sep) or "__pycache__" in relpath:
+                    continue
+                try:
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    file_map[filepath] = content
+                except Exception:
+                    continue
+
+            reports = cpg.analyze_project(file_map)
+            summary = cpg.summary(reports)
+
+            findings = []
+            for report in reports:
+                for taint_path in report.taint_paths:
+                    raw = taint_to_rule_findings(taint_path)
+                    finding = Finding(
+                        check_name=raw["check_name"],
+                        severity=raw["severity"],
+                        message=raw["message"],
+                        file_path=raw["file_path"],
+                        line_start=raw["line_start"],
+                        line_end=raw.get("line_end", raw["line_start"]),
+                        evidence=raw["evidence"],
+                        remediation=raw["remediation"],
+                        confidence=raw.get("confidence", 0.8),
+                    )
+                    findings.append(finding)
+
+            self.bus.send(
+                sender="cpg_analyzer",
+                receiver="orchestrator",
+                msg_type=MessageType.FINDING,
+                content=f"CPG found {len(findings)} taint paths "
+                        f"({summary['critical_paths']} critical, {summary['high_paths']} high)",
+                data=summary,
+            )
+
+            return findings
+        except Exception as e:
+            self.bus.send(
+                sender="cpg_analyzer",
+                receiver="orchestrator",
+                msg_type=MessageType.FINDING,
+                content=f"CPG scan failed: {e}",
+            )
+            return []
 
     # ── Phase 2: Cross-review ─────────────────────────────────────────────────
 
@@ -466,8 +572,39 @@ class AgentOrchestrator:
                 cycle_log.append(round_data)
                 break
 
+            # Phase 1.5: Harness — validate inspect results
+            raw_findings = [f.to_dict() for f in self.all_findings]
+            harness_valid, harness_inspect_verdicts = self.harness.validate_after_inspect(
+                raw_findings, agent_name="orchestrator"
+            )
+            round_data["harness_inspect"] = {
+                "valid": len(harness_valid),
+                "actions": {
+                    k: v for k, v in Counter(
+                        v.action.value for v in harness_inspect_verdicts
+                    ).items()
+                },
+            }
+
             # Phase 2: Review
             round_data["review_stats"] = self.review_phase()
+
+            # Phase 2.5: Harness — verify review results
+            confirmed_issues = [f.to_dict() for f in self.all_findings if f.ruling == "confirmed"]
+            rejected_issues = [f.to_dict() for f in self.all_findings if f.ruling == "rejected"]
+            if confirmed_issues or rejected_issues:
+                verification_report = self.harness.verify_after_review(
+                    confirmed_issues, rejected_issues
+                )
+                round_data["harness_review"] = {
+                    "total": verification_report.total,
+                    "passed": verification_report.passed,
+                    "flagged": verification_report.flagged,
+                    "rejected": verification_report.rejected,
+                    "adjusted": verification_report.adjusted,
+                    "merged": verification_report.merged,
+                    "retried": verification_report.retried,
+                }
 
             # Phase 3: Debate (round 1 only)
             if round_num == 1:
@@ -512,6 +649,12 @@ class AgentOrchestrator:
             "converged": self.stable_rounds >= self.CONVERGENCE_STABILITY,
             "bus_stats": self.bus.get_stats(),
             "global_stats": self.global_kb.get_stats(),
+            # Harness Engineering metrics
+            "harness": self.harness.get_harness_report(),
+            "drift": self.harness.detect_drift(
+                self.project_path,
+                [f.to_dict() for f in self.all_findings if f.ruling == "confirmed"],
+            ).__dict__,
         }
 
     # ── Evolution Report ───────────────────────────────────────────────────────
