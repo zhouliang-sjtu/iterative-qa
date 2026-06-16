@@ -25,6 +25,7 @@ from .bus import AgentCommunicationBus
 from .memory import ProjectMemory, GlobalKnowledgeBase
 from .rule_agents import (
     SecurityAgent, HealthcareAgent, PHIAgent, ComplianceAgent, MedicalDataAgent,
+    FHIRAgent, DICOMAgent, HL7Agent, CDSRulesAgent,
 )
 from .llm_agents import LLM_AGENT_CLASSES
 
@@ -140,9 +141,20 @@ class AgentOrchestrator:
         # Mandatory agents
         self.active_agents = ["security", "developer"]
 
-        # Domain matching
-        if "医疗" in domain or "medical" in domain.lower() or "healthcare" in domain.lower():
-            self.active_agents.extend(["healthcare", "phi_protection", "medical_data", "compliance"])
+        # Domain matching — healthcare projects activate full medical agent suite
+        is_healthcare = (
+            "医疗" in domain or "medical" in domain.lower() or "healthcare" in domain.lower()
+        )
+        # Also detect via tech stack dependencies
+        health_libs = {"fhirclient", "pydicom", "hl7apy", "fhiry", "medspacy", "clinicalnlp"}
+        if health_libs & set(str(tech_stack).lower().split(", ")):
+            is_healthcare = True
+
+        if is_healthcare:
+            self.active_agents.extend([
+                "healthcare", "phi_protection", "medical_data",
+                "fhir", "dicom", "hl7", "cds", "compliance",
+            ])
 
         # Global KB recommendations
         kb_recs = self.global_kb.recommend_agents(project_type, domain)
@@ -179,6 +191,10 @@ class AgentOrchestrator:
             "phi_protection": (PHIAgent, AgentRole.INSPECTOR),
             "compliance": (ComplianceAgent, AgentRole.INSPECTOR),
             "medical_data": (MedicalDataAgent, AgentRole.INSPECTOR),
+            "fhir": (FHIRAgent, AgentRole.INSPECTOR),
+            "dicom": (DICOMAgent, AgentRole.INSPECTOR),
+            "hl7": (HL7Agent, AgentRole.INSPECTOR),
+            "cds": (CDSRulesAgent, AgentRole.INSPECTOR),
         }
 
         for name, (cls, role) in rule_agent_classes.items():

@@ -328,6 +328,118 @@ class TestGlobalKnowledgeBase:
         assert stats["issues_fixed"] >= 0
 
 
+# ── Healthcare Rule Engine ────────────────────────────────────────────────────
+
+class TestHealthcareRuleEngine:
+    def test_phi_ssn_detection(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = 'patient_ssn = "123-45-6789"\nprint(patient_ssn)'
+        findings = engine.scan_file("test.py", code)
+        phi_findings = [f for f in findings if "ssn" in f.check_name.lower()]
+        assert len(phi_findings) >= 1
+        assert phi_findings[0].severity == "critical"
+
+    def test_china_id_card_detection(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = 'id_card = "310101199001011234"\nlogger.info(id_card)'
+        findings = engine.scan_file("test.py", code)
+        cn_phi = [f for f in findings if "china_national_id" in f.check_name.lower()]
+        assert len(cn_phi) >= 1
+        assert cn_phi[0].severity == "critical"
+
+    def test_phi_in_log_detection(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = 'print(f"Patient {patient_name} has ID {id_card}")'
+        findings = engine.scan_file("test.py", code)
+        leak = [f for f in findings if "phi_leak" in f.check_name.lower()]
+        assert len(leak) >= 1
+        assert leak[0].severity == "critical"
+
+    def test_lab_value_range_invalid(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = "bp = 350\nhr = 10"
+        findings = engine.scan_file("test.py", code)
+        lab = [f for f in findings if "lab_value" in f.check_name.lower()]
+        assert len(lab) >= 1
+        assert lab[0].severity == "high"
+        assert "350" in lab[0].message
+
+    def test_lab_value_range_valid(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = "bp = 120\nhr = 75"
+        findings = engine.scan_file("test.py", code)
+        lab = [f for f in findings if "lab_value" in f.check_name.lower()]
+        assert len(lab) == 0
+
+    def test_fhir_http_insecure(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = 'client = FHIRClient(settings={"api_base": "http://fhir.example.com"})'
+        findings = engine.scan_file("fhir_client.py", code)
+        fhir = [f for f in findings if "fhir_http" in f.check_name.lower()]
+        assert len(fhir) >= 1
+        assert fhir[0].severity == "critical"
+
+    def test_fhir_https_safe(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = 'client = FHIRClient(settings={"api_base": "https://fhir.example.com"})'
+        findings = engine.scan_file("fhir_client.py", code)
+        fhir = [f for f in findings if "fhir_http" in f.check_name.lower()]
+        assert len(fhir) == 0
+
+    def test_dicom_phi_tags(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = """import pydicom
+dcm = pydicom.dcmread("scan.dcm")
+print(dcm.PatientName)
+dcm.save_as("out.dcm")"""
+        findings = engine.scan_file("dicom_proc.py", code)
+        dicom = [f for f in findings if "dicom_phi" in f.check_name.lower()]
+        assert len(dicom) >= 1
+        assert dicom[0].severity == "critical"
+
+    def test_hl7_mllp_no_tls(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = """import hl7apy
+from hl7apy.mllp import MLLPServer
+server = MLLPServer("0.0.0.0", 2575)"""
+        findings = engine.scan_file("hl7_server.py", code)
+        hl7 = [f for f in findings if "hl7_mllp" in f.check_name.lower()]
+        assert len(hl7) >= 1
+        assert hl7[0].severity == "critical"
+
+    def test_cds_missing_fallback(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = """def check_bp(systolic):
+    if systolic > 180:
+        alert("Hypertensive crisis")
+    return None"""
+        findings = engine.scan_file("cds_rules.py", code)
+        cds = [f for f in findings if "cds_missing_fallback" in f.check_name.lower()]
+        assert len(cds) >= 1
+        assert cds[0].severity == "high"
+
+    def test_smart_token_no_validation(self):
+        from codespect_matrix.agents.healthcare_rules import HealthcareRuleEngine
+        engine = HealthcareRuleEngine()
+        code = """import fhirclient
+headers = {"Authorization": f"Bearer {access_token}"}
+response = requests.get(url, headers=headers)"""
+        findings = engine.scan_file("smart_app.py", code)
+        smart = [f for f in findings if "smart_token" in f.check_name.lower()]
+        assert len(smart) >= 1
+        assert smart[0].severity == "critical"
+
+
 # ── Integration: Memory + Bus ─────────────────────────────────────────────────
 
 class TestIntegration:

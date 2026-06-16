@@ -25,6 +25,11 @@ class ProjectScanner:
             "Redis": ["redis"],
             "Docker": ["Dockerfile", "docker-compose"],
             "Node.js": ["package.json", "node_modules"],
+            # Healthcare-specific libraries
+            "FHIR": ["fhirclient", "fhiry", "fhir.resources"],
+            "DICOM": ["pydicom", "dicom"],
+            "HL7": ["hl7apy", "hl7"],
+            "MedicalNLP": ["medspacy", "clinicalnlp", "scispacy"],
         }
         
         # 项目类型特征
@@ -41,7 +46,17 @@ class ProjectScanner:
         # 领域特征
         self.domain_patterns = {
             "金融": ["finance", "bank", "stock", "fund", "investment"],
-            "医疗": ["healthcare", "medical", "hospital", "patient", "clinic", "disease"],
+            "医疗": [
+                # English healthcare keywords
+                "healthcare", "medical", "hospital", "patient", "clinic", "disease",
+                "fhir", "hl7", "dicom", "hipaa", "phi", "ehr", "emr", "his",
+                "clinical", "diagnosis", "prescription", "medicine", "pharmacy",
+                "laboratory", "lab", "radiology", "pathology", "surgery",
+                "vital_signs", "biometric", "observation", "encounter",
+                # Chinese healthcare keywords
+                "患者", "病历", "诊断", "处方", "药品", "医院", "临床",
+                "检验", "检查", "影像", "病理", "手术", "体温", "血压", "血糖",
+            ],
             "电商": ["ecommerce", "shop", "store", "product"],
             "教育": ["education", "learning", "course", "school"],
             "政府": ["government", "gov", "public"],

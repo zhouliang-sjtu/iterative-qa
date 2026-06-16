@@ -56,9 +56,16 @@ examples:
         help="output JSON format"
     )
     parser.add_argument(
+        "--format",
+        type=str,
+        default="auto",
+        choices=["auto", "text", "html", "md", "markdown", "json"],
+        help="report format: auto (infer from --output suffix), text, html, md, json"
+    )
+    parser.add_argument(
         "--output",
         type=str,
-        help="report output file path"
+        help="report output file path (e.g., report.html, report.md)"
     )
     
     # ── Evolution ──
@@ -160,12 +167,60 @@ def _run_agent_mode(args):
     print(f"\n  starting review...")
     result = orchestrator.run_full_cycle(max_rounds=args.max_rounds)
     
-    if args.json:
+    # Determine output format
+    output_format = args.format
+    if output_format == "auto" and args.output:
+        if args.output.lower().endswith(".html"):
+            output_format = "html"
+        elif args.output.lower().endswith((".md", ".markdown")):
+            output_format = "md"
+        elif args.output.lower().endswith(".json"):
+            output_format = "json"
+        else:
+            output_format = "text"
+    elif output_format == "auto":
+        output_format = "text"
+
+    if args.json or output_format == "json":
         print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, ensure_ascii=False, default=str)
+            print(f"\n  JSON report saved to: {args.output}")
+    elif output_format in ("html", "md", "markdown"):
+        from codespect_matrix.report_generator import ComprehensiveReportGenerator
+        from codespect_matrix.evolution import EvolutionReporter
+
+        # Run evolution analysis for richer report data
+        try:
+            evo_reporter = EvolutionReporter(args.path)
+            evolution = evo_reporter.full_report(result.get("confirmed_issues", []))
+        except Exception:
+            evolution = None
+
+        gen = ComprehensiveReportGenerator(args.path)
+        fmt = "html" if output_format == "html" else "md"
+        report = gen.generate(
+            review_result=result,
+            evolution_report=evolution,
+            profile=profile,
+            format=fmt,
+        )
+
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(report)
+            print(f"\n  {fmt.upper()} report saved to: {args.output}")
+        else:
+            # For HTML without output file, save to default path
+            default_path = os.path.join(args.path, f"codespect-report.{fmt}")
+            with open(default_path, "w", encoding="utf-8") as f:
+                f.write(report)
+            print(f"\n  {fmt.upper()} report saved to: {default_path}")
     else:
         report = orchestrator.generate_report(result)
         print("\n" + report)
-        
+
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write(report)

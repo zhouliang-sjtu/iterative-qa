@@ -69,20 +69,38 @@ memory:
 severity:
   critical:
     label: "P0"
-    description: "Service crash / PHI leak / compile failure"
+    description: "Service crash / PHI leak / compile failure / HIPAA violation"
     weight: 100
   high:
     label: "P1"
-    description: "Security vulnerability / data loss / missing timeout"
+    description: "Security vulnerability / data loss / missing timeout / FHIR auth missing"
     weight: 50
   medium:
     label: "P2"
-    description: "Best practice violation / missing rate limit"
+    description: "Best practice violation / missing rate limit / CDS threshold hardcoded"
     weight: 15
   low:
     label: "P3"
     description: "Optimization suggestion"
     weight: 3
+
+# ─── Healthcare-Specific Settings ─────────────────────────────────────────────
+healthcare:
+  # Lab value physiological ranges (override defaults in healthcare_rules.py)
+  lab_ranges:
+    blood_pressure_systolic: { min: 60, max: 260, unit: "mmHg" }
+    blood_pressure_diastolic: { min: 30, max: 150, unit: "mmHg" }
+    heart_rate: { min: 30, max: 250, unit: "bpm" }
+    spo2: { min: 60, max: 100, unit: "%" }
+    blood_glucose: { min: 20, max: 600, unit: "mg/dL" }
+  # PHI detection strictness: strict | moderate | relaxed
+  phi_detection_mode: "strict"
+  # FHIR endpoints must use HTTPS
+  enforce_fhir_https: true
+  # DICOM export must be encrypted/anonymized
+  enforce_dicom_encryption: true
+  # HL7 transport must use TLS/MLLP encryption
+  enforce_hl7_tls: true
 
 # ─── CI/CD Gate Thresholds ────────────────────────────────────────────────────
 ci_gate:
