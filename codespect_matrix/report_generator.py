@@ -1,74 +1,50 @@
 """Comprehensive report generator — HTML + Markdown dual format.
 
-Generates publication-quality audit reports with:
-- Project profile (tech stack, domain, scale)
-- Agent perspective audit matrix
-- Round-by-round issue discovery & remediation tracking
-- Convergence determination
-- Quality rating dashboard (score bars + letter grade)
-- Technical debt inventory
-- Service health status
+Report structure (round-centric):
+  1. Project Profile
+  2. Round Reports (repeat per round)
+     2.1 Five-Phase Scan
+     2.2 Issue Discovery & Remediation
+     2.3 Remaining P3 Technical Debt
+     2.4 Convergence Determination
+     2.5 Quality Rating
+     2.6 Round Conclusion
+  3. All Fixes Summary
+  4. Final Convergence & Conclusion
 """
 
 from __future__ import annotations
 
-import os
-import json
 import html
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 
 
 # ─── Data Structures ─────────────────────────────────────────────────────────
 
 @dataclass
-class AgentPerspective:
+class ScanPhase:
     name: str
-    compatibility: float          # 0.0-1.0
-    p0: int
-    p1: int
-    p2: int
-    conclusion: str
-    is_new: bool = False
+    status: str          # pass / warn / fail / info
+    details: str = ""
 
 
 @dataclass
-class RoundSummary:
-    round_num: int
-    p0: int
-    p1: int
-    p2: int
-    fixes_applied: int
-    status: str                   # "未收敛" | "趋于收敛" | "已收敛"
-    issues: List[Dict] = field(default_factory=list)
+class IssueItem:
+    severity: str        # critical / high / medium / low
+    check_name: str
+    message: str
+    file_path: str
+    line_start: int
+    remediation: str = ""
+    evidence: str = ""
 
 
 @dataclass
-class ScoreDimension:
-    label: str
-    score: float                  # 0-100
-    grade: str                    # A+/A/A-/B+/B/B-/C/D/F
-
-
-@dataclass
-class ProjectProfile:
-    name: str
-    project_type: str
-    domain: str
-    backend_stack: str
-    frontend_stack: str
-    ai_models: str
-    code_scale: str
-    ports: str
-    directory_structure: str
-
-
-@dataclass
-class FixRecord:
+class FixItem:
     idx: int
-    round_num: int
     level: str
     file: str
     problem: str
@@ -83,10 +59,40 @@ class TechDebtItem:
     recommendation: str
 
 
+@dataclass
+class ScoreDimension:
+    label: str
+    score: float         # 0-100
+    grade: str
+
+
+@dataclass
+class RoundReport:
+    round_num: int
+    scan_phases: List[ScanPhase] = field(default_factory=list)
+    issues_found: List[IssueItem] = field(default_factory=list)
+    fixes_applied: List[FixItem] = field(default_factory=list)
+    tech_debt: List[TechDebtItem] = field(default_factory=list)
+    convergence_status: str = "未收敛"   # 未收敛 / 趋于收敛 / 已收敛
+    scores: List[ScoreDimension] = field(default_factory=list)
+    conclusion: str = ""
+
+
+@dataclass
+class ProjectProfile:
+    name: str
+    project_type: str
+    domain: str
+    backend_stack: str
+    frontend_stack: str
+    code_scale: str
+    directory_structure: str
+
+
 # ─── Report Generator ────────────────────────────────────────────────────────
 
 class ComprehensiveReportGenerator:
-    """Generate comprehensive HTML/Markdown audit reports."""
+    """Generate round-centric HTML/Markdown audit reports."""
 
     SEVERITY_CLASS = {
         "critical": "p0",
@@ -107,38 +113,30 @@ class ComprehensiveReportGenerator:
 
     def generate(
         self,
-        review_result: Dict,
-        evolution_report: Optional[Dict] = None,
+        rounds: List[RoundReport],
         profile: Optional[Dict] = None,
         format: str = "html",
     ) -> str:
         """Generate report in specified format.
 
         Args:
-            review_result: output from orchestrator.run_full_cycle()
-            evolution_report: output from EvolutionReporter.full_report()
-            profile: project profile from scanner
+            rounds: list of RoundReport, one per review cycle
+            profile: project profile dict from scanner
             format: "html" | "md" | "markdown"
         """
-        # Build rich data structures
         project_profile = self._build_project_profile(profile)
-        perspectives = self._build_perspectives(review_result)
-        rounds = self._build_rounds(review_result)
-        fixes = self._build_fixes(review_result, rounds)
-        tech_debt = self._build_tech_debt(evolution_report)
-        scores = self._build_scores(evolution_report, review_result)
-        overall = self._compute_overall(scores)
-        convergence = self._build_convergence(rounds)
+        all_fixes = self._collect_all_fixes(rounds)
+        final_scores, final_grade, final_status = self._compute_final(rounds)
 
-        if format.lower() in ("html",):
+        if format.lower() == "html":
             return self._render_html(
-                project_profile, perspectives, rounds, fixes,
-                tech_debt, scores, overall, convergence, review_result,
+                project_profile, rounds, all_fixes,
+                final_scores, final_grade, final_status,
             )
         else:
             return self._render_markdown(
-                project_profile, perspectives, rounds, fixes,
-                tech_debt, scores, overall, convergence, review_result,
+                project_profile, rounds, all_fixes,
+                final_scores, final_grade, final_status,
             )
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -150,201 +148,39 @@ class ComprehensiveReportGenerator:
         tech_stack = p.get("tech_stack", [])
         backend = ", ".join([t for t in tech_stack if t not in ("React", "Vue", "Node.js")]) or "Unknown"
         frontend = ", ".join([t for t in tech_stack if t in ("React", "Vue", "Node.js")]) or "None"
-
         scale_info = p.get("scale", {})
         scale_str = f"{scale_info.get('total_files', '?')} files / {scale_info.get('total_lines', '?')} lines"
-
         return ProjectProfile(
             name=self.project_name,
             project_type=p.get("project_type", "Unknown"),
             domain=p.get("domain", "Unknown"),
             backend_stack=backend,
             frontend_stack=frontend,
-            ai_models="Configured via LLMService",
             code_scale=scale_str,
-            ports="Auto-detected",
             directory_structure=p.get("directory_structure", "Standard layout"),
         )
 
-    def _build_perspectives(self, result: Dict) -> List[AgentPerspective]:
-        """Build perspective audit matrix from review result."""
-        perspectives = []
-        agent_stats = result.get("agent_stats", {})
-
-        for agent_name, stats in agent_stats.items():
-            sev_counts = stats.get("severity_counts", {})
-            perspectives.append(AgentPerspective(
-                name=agent_name,
-                compatibility=stats.get("compatibility", 0.8),
-                p0=sev_counts.get("critical", 0),
-                p1=sev_counts.get("high", 0),
-                p2=sev_counts.get("medium", 0),
-                conclusion=stats.get("conclusion", "Reviewed"),
-            ))
-
-        # If no agent stats, build from findings
-        if not perspectives:
-            findings = result.get("confirmed_issues", [])
-            agent_findings = {}
-            for f in findings:
-                agent = f.get("agent", "unknown")
-                agent_findings.setdefault(agent, []).append(f)
-
-            for agent, finds in agent_findings.items():
-                sev = {"critical": 0, "high": 0, "medium": 0}
-                for f in finds:
-                    s = f.get("severity", "low")
-                    if s in sev:
-                        sev[s] += 1
-                perspectives.append(AgentPerspective(
-                    name=agent,
-                    compatibility=0.8,
-                    p0=sev["critical"],
-                    p1=sev["high"],
-                    p2=sev["medium"],
-                    conclusion=f"{len(finds)} findings reviewed",
-                ))
-
-        return perspectives
-
-    def _build_rounds(self, result: Dict) -> List[RoundSummary]:
-        """Build round summaries from review cycles."""
-        rounds = []
-        cycles = result.get("cycles", [])
-
-        for i, cycle in enumerate(cycles, 1):
-            confirmed = cycle.get("confirmed", [])
-            sev_counts = {"critical": 0, "high": 0, "medium": 0}
-            for f in confirmed:
-                s = f.get("severity", "low")
-                if s in sev_counts:
-                    sev_counts[s] += 1
-
-            status = "已收敛" if i > 1 and sev_counts["critical"] == 0 and sev_counts["high"] == 0 else "未收敛"
-            if i > 1 and status == "未收敛":
-                status = "趋于收敛"
-
-            rounds.append(RoundSummary(
-                round_num=i,
-                p0=sev_counts["critical"],
-                p1=sev_counts["high"],
-                p2=sev_counts["medium"],
-                fixes_applied=cycle.get("fixes_applied", 0),
-                status=status,
-                issues=confirmed,
-            ))
-
-        return rounds
-
-    def _build_fixes(self, result: Dict, rounds: List[RoundSummary]) -> List[FixRecord]:
-        """Build fix records from review result."""
+    def _collect_all_fixes(self, rounds: List[RoundReport]) -> List[FixItem]:
         fixes = []
         idx = 1
-        for cycle in result.get("cycles", []):
-            round_num = cycle.get("round", 1)
-            for fix in cycle.get("fixes", []):
-                fixes.append(FixRecord(
-                    idx=idx,
-                    round_num=round_num,
-                    level=fix.get("severity", "P3"),
-                    file=fix.get("file", "unknown"),
-                    problem=fix.get("problem", "")[:80],
-                    fix_method=fix.get("fix", "")[:80],
-                ))
+        for r in rounds:
+            for f in r.fixes_applied:
+                f.idx = idx
+                fixes.append(f)
                 idx += 1
         return fixes
 
-    def _build_tech_debt(self, evolution: Optional[Dict]) -> List[TechDebtItem]:
-        """Build technical debt inventory."""
-        debt_items = []
-        if not evolution:
-            return debt_items
-
-        debt = evolution.get("technical_debt", {})
-        markers = debt.get("markers", [])
-        large_files = debt.get("large_files", [])
-
-        if markers:
-            debt_items.append(TechDebtItem(
-                id="P3-01",
-                description=f"{len(markers)} 处 TODO/FIXME/HACK 标记",
-                files=f"{len(set(m.get('file', '') for m in markers))} 文件",
-                recommendation="功能规划标记，业务决策后清理",
-            ))
-
-        if large_files:
-            debt_items.append(TechDebtItem(
-                id="P3-02",
-                description=f"{len(large_files)} 个超大文件 (>500行)",
-                files=", ".join([f["file"] for f in large_files[:3]]),
-                recommendation="拆分为单一职责模块",
-            ))
-
-        # Check for zero tests
-        cov = evolution.get("test_coverage", {})
-        if cov.get("test_files_found", 0) == 0:
-            debt_items.append(TechDebtItem(
-                id="P3-03",
-                description="0 个自动化测试",
-                files="全项目",
-                recommendation="补充核心模块单元测试和集成测试",
-            ))
-
-        return debt_items
-
-    def _build_scores(self, evolution: Optional[Dict], result: Dict) -> List[ScoreDimension]:
-        """Build score dimensions."""
-        scores = []
-
-        if evolution:
-            h = evolution.get("health", {})
-            a = evolution.get("architecture", {})
-            d = evolution.get("technical_debt", {})
-            c = evolution.get("test_coverage", {})
-
-            scores.append(ScoreDimension("代码质量", h.get("health_score", 50), self._to_grade(h.get("health_score", 50))))
-            scores.append(ScoreDimension("架构健康", a.get("architecture_health", 50), self._to_grade(a.get("architecture_health", 50))))
-            scores.append(ScoreDimension("技术债务", max(0, 100 - d.get("debt_index", 0)), self._to_grade(max(0, 100 - d.get("debt_index", 0)))))
-            scores.append(ScoreDimension("测试覆盖", c.get("percent_covered", 0), self._to_grade(c.get("percent_covered", 0))))
-        else:
-            # Simple score from findings
-            confirmed = result.get("confirmed_issues", [])
-            sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-            for f in confirmed:
-                s = f.get("severity", "low")
-                sev_counts[s] = sev_counts.get(s, 0) + 1
-
-            penalty = sev_counts["critical"] * 20 + sev_counts["high"] * 10 + sev_counts["medium"] * 3
-            quality_score = max(0, 100 - penalty)
-            scores.append(ScoreDimension("代码质量", quality_score, self._to_grade(quality_score)))
-            scores.append(ScoreDimension("安全性", quality_score, self._to_grade(quality_score)))
-            scores.append(ScoreDimension("可维护性", quality_score, self._to_grade(quality_score)))
-            scores.append(ScoreDimension("部署就绪", quality_score, self._to_grade(quality_score)))
-
-        return scores
-
-    def _compute_overall(self, scores: List[ScoreDimension]) -> tuple[float, str, str]:
-        """Compute overall score, grade, and status."""
+    def _compute_final(self, rounds: List[RoundReport]) -> tuple:
+        if not rounds:
+            return [], "F", "需立即修复"
+        last = rounds[-1]
+        scores = last.scores
         if not scores:
-            return 0.0, "F", "需立即修复"
+            return [], "F", "需立即修复"
         avg = sum(s.score for s in scores) / len(scores)
         grade = self._to_grade(avg)
-        status = "可交付" if avg >= 70 else "需整改" if avg >= 50 else "需立即修复"
-        return round(avg, 1), grade, status
-
-    def _build_convergence(self, rounds: List[RoundSummary]) -> List[Dict]:
-        """Build convergence determination table."""
-        convergence = []
-        for r in rounds:
-            convergence.append({
-                "round": f"第 {r.round_num} 轮",
-                "p0": r.p0,
-                "p1": r.p1,
-                "p2": r.p2,
-                "fixes": r.fixes_applied,
-                "status": r.status,
-            })
-        return convergence
+        status = "可交付" if avg >= 70 and last.convergence_status == "已收敛" else "需整改" if avg >= 50 else "需立即修复"
+        return scores, grade, status
 
     # ═══════════════════════════════════════════════════════════════════════
     # HTML Renderer
@@ -353,33 +189,29 @@ class ComprehensiveReportGenerator:
     def _render_html(
         self,
         profile: ProjectProfile,
-        perspectives: List[AgentPerspective],
-        rounds: List[RoundSummary],
-        fixes: List[FixRecord],
-        tech_debt: List[TechDebtItem],
-        scores: List[ScoreDimension],
-        overall: tuple,
-        convergence: List[Dict],
-        result: Dict,
+        rounds: List[RoundReport],
+        all_fixes: List[FixItem],
+        final_scores: List[ScoreDimension],
+        final_grade: str,
+        final_status: str,
     ) -> str:
-        """Render full HTML report."""
-        overall_score, overall_grade, overall_status = overall
-
         parts = []
         parts.append(self._html_head(profile.name))
-        parts.append(self._html_header(profile))
-        parts.append(self._html_perspective_matrix(perspectives))
-        parts.append(self._html_rounds(rounds))
-        if fixes:
-            parts.append(self._html_fixes(fixes))
-        if tech_debt:
-            parts.append(self._html_tech_debt(tech_debt))
-        parts.append(self._html_convergence(convergence))
-        parts.append(self._html_scores(scores, overall_score, overall_grade, overall_status))
-        parts.append(self._html_confirmed_issues(result.get("confirmed_issues", [])))
+        parts.append(self._html_header(profile, final_grade, final_status))
+
+        # Section 2: Round Reports
+        for r in rounds:
+            parts.append(self._html_round(r))
+
+        # Section 3: All Fixes Summary
+        if all_fixes:
+            parts.append(self._html_all_fixes(all_fixes))
+
+        # Section 4: Final Convergence
+        parts.append(self._html_final_convergence(rounds, final_scores, final_grade, final_status))
+
         parts.append(self._html_footer())
         parts.append("</div></body></html>")
-
         return "\n".join(parts)
 
     def _html_head(self, title: str) -> str:
@@ -395,6 +227,7 @@ class ComprehensiveReportGenerator:
   --text: #212529; --muted: #6c757d; --accent: #0d6efd;
   --green: #198754; --green-bg: #d1e7dd; --yellow: #b8860b;
   --yellow-bg: #fff3cd; --red: #dc3545; --red-bg: #f8d7da;
+  --blue-bg: #cfe2ff; --blue: #084298;
   --table-stripe: #f2f4f6; --code-bg: #f0f2f4;
   --shadow: 0 1px 3px rgba(0,0,0,0.08);
 }}
@@ -414,9 +247,10 @@ body {{
   font-weight: 700; padding: 3px 16px; border-radius: 14px; font-size: 13px;
   margin-bottom: 12px; border: 1px solid #badbcc;
 }}
+.header .badge.warn {{ background: var(--yellow-bg); color: var(--yellow); border-color: #ffecb5; }}
+.header .badge.fail {{ background: var(--red-bg); color: var(--red); border-color: #f5c2c7; }}
 .header .sub {{ color: var(--muted); font-size: 14px; margin-top: 2px; }}
 .header .meta {{ color: var(--muted); font-size: 13px; margin-top: 8px; }}
-.header .meta span {{ margin: 0 14px; }}
 .card {{
   background: var(--card); border: 1px solid var(--border); border-radius: 10px;
   padding: 28px; margin-bottom: 24px; box-shadow: var(--shadow);
@@ -425,10 +259,10 @@ h2 {{
   font-size: 21px; margin-bottom: 18px; padding-bottom: 8px;
   border-bottom: 2px solid var(--accent); color: #1a1a2e;
 }}
-h3 {{ font-size: 17px; margin: 28px 0 12px; color: var(--accent); }}
-h4 {{ font-size: 15px; margin: 18px 0 8px; color: #343a40; }}
-table {{ width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }}
-th, td {{ text-align: left; padding: 10px 14px; border: 1px solid var(--border); }}
+h3 {{ font-size: 17px; margin: 24px 0 10px; color: var(--accent); }}
+h4 {{ font-size: 15px; margin: 16px 0 6px; color: #343a40; }}
+table {{ width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }}
+th, td {{ text-align: left; padding: 8px 12px; border: 1px solid var(--border); }}
 th {{ background: #e9ecef; font-weight: 600; color: #495057; font-size: 13px; }}
 tr:nth-child(even) td {{ background: var(--table-stripe); }}
 .pass {{ color: var(--green); font-weight: 600; }}
@@ -438,62 +272,71 @@ tr:nth-child(even) td {{ background: var(--table-stripe); }}
 .p1 {{ background: #fd7e14; color: #fff; padding: 2px 9px; border-radius: 4px; font-size: 12px; font-weight: 700; }}
 .p2 {{ background: #ffc107; color: #000; padding: 2px 9px; border-radius: 4px; font-size: 12px; font-weight: 700; }}
 .p3 {{ background: #adb5bd; color: #fff; padding: 2px 9px; border-radius: 4px; font-size: 12px; font-weight: 700; }}
+.phase-pass {{ color: var(--green); font-weight: 700; }}
+.phase-warn {{ color: var(--yellow); font-weight: 700; }}
+.phase-fail {{ color: var(--red); font-weight: 700; }}
+.phase-info {{ color: var(--accent); font-weight: 700; }}
 pre {{
   background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
-  padding: 16px; overflow-x: auto; font-size: 13px; color: #198754; margin: 12px 0; line-height: 1.6;
+  padding: 14px; overflow-x: auto; font-size: 13px; color: #198754; margin: 10px 0; line-height: 1.6;
 }}
-.score-bar {{ display: flex; align-items: center; gap: 14px; margin: 8px 0; }}
+.score-bar {{ display: flex; align-items: center; gap: 14px; margin: 6px 0; }}
 .score-bar .label {{ width: 100px; color: var(--muted); font-size: 14px; }}
-.score-bar .bar {{ flex: 1; height: 22px; background: #e9ecef; border-radius: 11px; overflow: hidden; }}
-.score-bar .fill {{ height: 100%; border-radius: 11px; transition: width .6s; }}
+.score-bar .bar {{ flex: 1; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden; }}
+.score-bar .fill {{ height: 100%; border-radius: 10px; transition: width .6s; }}
 .score-bar .val {{ width: 60px; text-align: right; font-weight: 700; font-size: 14px; }}
 .fill-a {{ background: var(--green); }}
 .fill-b {{ background: #ffc107; }}
 .fill-c {{ background: #fd7e14; }}
 .fill-f {{ background: var(--red); }}
-.rating-wrap {{ text-align: center; padding: 20px 0; }}
+.rating-wrap {{ text-align: center; padding: 16px 0; }}
 .rating-circle {{
   display: inline-flex; align-items: center; justify-content: center;
-  width: 130px; height: 130px; border-radius: 50%; border: 5px solid #ffc107;
-  font-size: 42px; font-weight: 800; color: #b8860b; background: #fffbf0;
+  width: 120px; height: 120px; border-radius: 50%; border: 4px solid #ffc107;
+  font-size: 38px; font-weight: 800; color: #b8860b; background: #fffbf0;
 }}
-.info-list {{ padding-left: 20px; margin: 12px 0; line-height: 2.2; }}
 .problem-detail {{
   background: #f8f9fa; border-left: 4px solid var(--accent);
-  padding: 14px 18px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 14px;
+  padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; font-size: 14px;
 }}
 .problem-detail.p0-border {{ border-left-color: var(--red); }}
 .problem-detail.p1-border {{ border-left-color: #fd7e14; }}
 .problem-detail.p2-border {{ border-left-color: #ffc107; }}
-.problem-detail .file {{ color: var(--accent); font-family: 'SF Mono', 'Consolas', monospace; font-weight: 600; }}
+.problem-detail .file {{ color: var(--accent); font-family: 'SF Mono', 'Consolas', monospace; font-weight: 600; font-size: 12px; }}
+.round-card {{ border-left: 4px solid var(--accent); }}
+.round-card.converged {{ border-left-color: var(--green); }}
+.round-card.partial {{ border-left-color: #ffc107; }}
 .footer {{
-  text-align: center; padding: 36px 0 20px; border-top: 2px solid var(--border);
-  margin-top: 32px; color: var(--muted); font-size: 13px;
+  text-align: center; padding: 32px 0 20px; border-top: 2px solid var(--border);
+  margin-top: 28px; color: var(--muted); font-size: 13px;
 }}
 .footer strong {{ color: var(--accent); }}
-.badge-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }}
-.round-header {{
-  font-size: 18px; font-weight: 700; color: #1a1a2e;
-  margin: 20px 0 12px; padding-bottom: 4px; border-bottom: 1px solid var(--border);
-}}
+.badge-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }}
 .sub-table {{ font-size: 13px; }}
-.sub-table td, .sub-table th {{ padding: 7px 10px; }}
+.sub-table td, .sub-table th {{ padding: 6px 10px; }}
+.conclusion-box {{
+  background: var(--blue-bg); border: 1px solid #b6d4fe; border-radius: 6px;
+  padding: 14px 18px; margin: 12px 0; color: var(--blue); font-size: 14px;
+}}
+.conclusion-box.success {{ background: var(--green-bg); border-color: #badbcc; color: var(--green); }}
+.conclusion-box.warning {{ background: var(--yellow-bg); border-color: #ffecb5; color: var(--yellow); }}
 </style>
 </head>
 <body>
 <div class="container">"""
 
-    def _html_header(self, profile: ProjectProfile) -> str:
-        # Determine badge based on whether there are critical issues
-        badge_text = "✅ 已收敛 · 可交付" if True else "⚠️ 未收敛 · 需修复"
+    def _html_header(self, profile: ProjectProfile, final_grade: str, final_status: str) -> str:
+        badge_class = "pass" if final_status == "可交付" else "warn" if final_status == "需整改" else "fail"
+        badge_text = f"✅ {final_status}" if final_status == "可交付" else f"⚠️ {final_status}"
         return f"""
 <div class="header">
-  <div class="badge">{badge_text}</div>
+  <div class="badge {badge_class}">{badge_text}</div>
   <h1>codespect-matrix 质检报告</h1>
   <p class="sub">{html.escape(profile.name)}</p>
   <div class="meta">
     <span>📅 {self.date_str}</span>
     <span>🔧 {html.escape(profile.backend_stack)}</span>
+    <span>📊 综合评级 {final_grade}</span>
   </div>
 </div>
 
@@ -509,206 +352,173 @@ pre {{
   </table>
 </div>"""
 
-    def _html_perspective_matrix(self, perspectives: List[AgentPerspective]) -> str:
-        rows = []
-        for p in perspectives:
-            new_badge = " 🆕" if p.is_new else ""
-            p0_class = "pass" if p.p0 == 0 else "fail"
-            p1_class = "pass" if p.p1 == 0 else "warn"
-            p2_display = f'<span style="color:var(--muted)">⚪</span>{p.p2}' if p.p2 > 0 else '<span class="pass">0</span>'
-            rows.append(
-                f"<tr><td><strong>{html.escape(p.name)}</strong>{new_badge}</td>"
-                f"<td>{p.compatibility:.2f}</td>"
-                f'<td class="{p0_class}">{p.p0}</td>'
-                f'<td class="{p1_class}">{p.p1}</td>'
-                f'<td>{p2_display}</td>'
-                f"<td>{html.escape(p.conclusion)}</td></tr>"
-            )
+    def _html_round(self, r: RoundReport) -> str:
+        border_class = "converged" if r.convergence_status == "已收敛" else "partial" if "收敛" in r.convergence_status else ""
+        status_badge = f'<span class="p0">未收敛</span>' if r.convergence_status == "未收敛" else f'<span class="p2">趋于收敛</span>' if "趋于" in r.convergence_status else f'<span class="pass" style="background:var(--green);color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:700;">已收敛</span>'
 
-        return f"""
-<div class="card">
-  <h2>2. 视角审计矩阵</h2>
-  <table>
-    <thead>
-      <tr><th>视角专家</th><th>兼容性</th><th>P0</th><th>P1</th><th>P2</th><th>结论</th></tr>
-    </thead>
-    <tbody>
-      {''.join(rows)}
-    </tbody>
-  </table>
-</div>"""
+        # 2.1 Five-phase scan
+        phases_html = ""
+        for phase in r.scan_phases:
+            status_class = f"phase-{phase.status}"
+            phases_html += f"<tr><td>{html.escape(phase.name)}</td><td class='{status_class}'>{html.escape(phase.status.upper())}</td><td>{html.escape(phase.details)}</td></tr>"
 
-    def _html_rounds(self, rounds: List[RoundSummary]) -> str:
-        if not rounds:
-            return ""
-
-        round_sections = []
-        for r in rounds:
-            status_color = "pass" if r.status == "已收敛" else "warn" if r.status == "趋于收敛" else "fail"
-            issues_html = ""
-            for issue in r.issues[:5]:  # Show top 5 issues per round
-                sev = issue.get("severity", "low")
-                msg = html.escape(issue.get("message", "")[:120])
-                filepath = html.escape(issue.get("file_path", ""))
-                line = issue.get("line_start", 0)
-                border_class = self.SEVERITY_CLASS.get(sev, "p3")
+        # 2.2 Issues found
+        issues_html = ""
+        by_sev = {"critical": [], "high": [], "medium": [], "low": []}
+        for issue in r.issues_found:
+            by_sev.setdefault(issue.severity, []).append(issue)
+        for sev in ["critical", "high", "medium", "low"]:
+            items = by_sev.get(sev, [])
+            if not items:
+                continue
+            label = {"critical": "P0 严重", "high": "P1 高", "medium": "P2 中", "low": "P3 低"}.get(sev, sev)
+            border = self.SEVERITY_CLASS.get(sev, "p3")
+            issues_html += f"<h4>{label} ({len(items)} 项)</h4>"
+            for issue in items:
                 issues_html += f"""
-  <div class="problem-detail {border_class}-border">
-    <strong>{sev.upper()}</strong> — <code class="file">{filepath}:{line}</code><br>
-    {msg}
+  <div class="problem-detail {border}-border">
+    <span class="file">{html.escape(issue.file_path)}:{issue.line_start}</span><br>
+    <strong>[{html.escape(issue.check_name)}]</strong> {html.escape(issue.message)}<br>
+    {f'<span style="color:var(--muted);font-size:13px;">💡 {html.escape(issue.remediation)}</span>' if issue.remediation else ''}
   </div>"""
 
-            round_sections.append(f"""
-  <div class="round-header">第 {r.round_num} 轮扫描</div>
-  <div class="badge-row">
-    <span class="p0">P0 ×{r.p0}</span><span class="p1">P1 ×{r.p1}</span><span class="p2">P2 ×{r.p2}</span>
-    <span style="color:var(--muted);font-size:13px;margin-left:8px;">状态：<span class="{status_color}">{r.status}</span></span>
-  </div>
-  {issues_html}
-""")
+        # 2.3 Fixes applied
+        fixes_html = ""
+        if r.fixes_applied:
+            fixes_html += '<table class="sub-table"><thead><tr><th>#</th><th>级别</th><th>文件</th><th>问题</th><th>修复方式</th></tr></thead><tbody>'
+            for f in r.fixes_applied:
+                level_class = f.level.lower() if f.level.lower() in ("p0", "p1", "p2", "p3") else "p3"
+                fixes_html += f'<tr><td>{f.idx}</td><td><span class="{level_class}">{f.level}</span></td><td><code>{html.escape(f.file)}</code></td><td>{html.escape(f.problem)}</td><td>{html.escape(f.fix_method)}</td></tr>'
+            fixes_html += f'</tbody></table><p style="margin-top:8px;font-weight:600;color:var(--accent);">本轮修复: {len(r.fixes_applied)} 项</p>'
+        else:
+            fixes_html = '<p style="color:var(--muted);font-size:13px;">本轮未产生自动修复</p>'
 
-        return f"""
-<div class="card">
-  <h2>3. 逐轮扫描与问题发现</h2>
-  {''.join(round_sections)}
-</div>"""
+        # 2.4 Tech debt
+        debt_html = ""
+        if r.tech_debt:
+            debt_html += '<table class="sub-table"><thead><tr><th>ID</th><th>描述</th><th>文件</th><th>建议</th></tr></thead><tbody>'
+            for d in r.tech_debt:
+                debt_html += f'<tr><td><span class="p3">{d.id}</span></td><td>{html.escape(d.description)}</td><td>{html.escape(d.files)}</td><td>{html.escape(d.recommendation)}</td></tr>'
+            debt_html += '</tbody></table>'
+        else:
+            debt_html = '<p style="color:var(--muted);font-size:13px;">本轮无遗留技术债务</p>'
 
-    def _html_fixes(self, fixes: List[FixRecord]) -> str:
-        if not fixes:
-            return ""
-        rows = []
-        for f in fixes[:50]:  # Limit to 50 fixes in report
-            level_class = f.level.lower() if f.level.lower() in ("p0", "p1", "p2", "p3") else "p3"
-            rows.append(
-                f"<tr><td>{f.idx}</td><td>R{f.round_num}</td>"
-                f'<td><span class="{level_class}">{f.level}</span></td>'
-                f"<td><code>{html.escape(f.file)}</code></td>"
-                f"<td>{html.escape(f.problem)}</td>"
-                f"<td>{html.escape(f.fix_method)}</td></tr>"
-            )
-
-        return f"""
-<div class="card">
-  <h2>4. 修复汇总</h2>
-  <table class="sub-table">
-    <thead><tr><th>#</th><th>轮次</th><th>级别</th><th>文件</th><th>问题</th><th>修复方式</th></tr></thead>
-    <tbody>
-      {''.join(rows)}
-    </tbody>
-  </table>
-  <p style="margin-top:16px;font-weight:700;color:var(--accent);font-size:16px;">总计修复：{len(fixes)} 项</p>
-</div>"""
-
-    def _html_tech_debt(self, items: List[TechDebtItem]) -> str:
-        rows = ""
-        for item in items:
-            rows += (
-                f"<tr><td><span class=\"p3\">{item.id}</span></td>"
-                f"<td>{html.escape(item.description)}</td>"
-                f"<td>{html.escape(item.files)}</td>"
-                f"<td>{html.escape(item.recommendation)}</td></tr>"
-            )
-        return f"""
-<div class="card">
-  <h2>5. 遗留技术债务</h2>
-  <table>
-    <thead><tr><th>ID</th><th>描述</th><th>文件</th><th>建议</th></tr></thead>
-    <tbody>{rows}</tbody>
-  </table>
-</div>"""
-
-    def _html_convergence(self, convergence: List[Dict]) -> str:
-        if not convergence:
-            return ""
-        rows = ""
-        for c in convergence:
-            status_class = "pass" if c["status"] == "已收敛" else "warn" if "收敛" in c["status"] else "fail"
-            p0_class = "fail" if c["p0"] > 0 else "pass"
-            p1_class = "fail" if c["p1"] > 0 else "pass"
-            p2_class = "warn" if c["p2"] > 0 else "pass"
-            rows += (
-                f"<tr><td>{c['round']}</td>"
-                f'<td class="{p0_class}">{c["p0"]}</td>'
-                f'<td class="{p1_class}">{c["p1"]}</td>'
-                f'<td class="{p2_class}">{c["p2"]}</td>'
-                f"<td>{c['fixes']}</td>"
-                f'<td><span class="{status_class}">{c["status"]}</span></td></tr>'
-            )
-        return f"""
-<div class="card">
-  <h2>6. 收敛判定</h2>
-  <table>
-    <thead><tr><th>轮次</th><th>P0</th><th>P1</th><th>P2 (新)</th><th>修复项</th><th>状态</th></tr></thead>
-    <tbody>{rows}</tbody>
-  </table>
-</div>"""
-
-    def _html_scores(self, scores: List[ScoreDimension], overall_score: float, overall_grade: str, overall_status: str) -> str:
-        score_bars = ""
-        for s in scores:
+        # 2.5 Scores
+        scores_html = ""
+        for s in r.scores:
             fill_class = "fill-a" if s.score >= 80 else "fill-b" if s.score >= 60 else "fill-c" if s.score >= 40 else "fill-f"
             val_color = "var(--green)" if s.score >= 80 else "#b8860b" if s.score >= 60 else "#fd7e14" if s.score >= 40 else "var(--red)"
-            score_bars += f"""
+            scores_html += f"""
   <div class="score-bar">
     <span class="label">{html.escape(s.label)}</span>
     <div class="bar"><div class="fill {fill_class}" style="width:{s.score}%"></div></div>
     <span class="val" style="color:{val_color}">{s.score:.0f} {s.grade}</span>
   </div>"""
 
-        circle_color = "var(--green)" if overall_score >= 80 else "#ffc107" if overall_score >= 60 else "#fd7e14" if overall_score >= 40 else "var(--red)"
-        circle_bg = "#d4edda" if overall_score >= 80 else "#fffbf0" if overall_score >= 60 else "#fff3cd" if overall_score >= 40 else "#f8d7da"
-        text_color = "var(--green)" if overall_score >= 80 else "#b8860b" if overall_score >= 60 else "#fd7e14" if overall_score >= 40 else "var(--red)"
-
+        # 2.6 Conclusion
+        conclusion_class = "success" if r.convergence_status == "已收敛" else "warning"
         return f"""
-<div class="card">
-  <h2>7. 质量评级</h2>
-  {score_bars}
-  <div class="rating-wrap">
-    <div class="rating-circle" style="border-color:{circle_color};color:{circle_color};background:{circle_bg}">{overall_score:.0f}</div>
-    <p style="margin-top:12px;font-size:18px;font-weight:700;color:{text_color}">综合评级 {overall_grade} · {overall_status}</p>
+<div class="card round-card {border_class}">
+  <h2>2.{r.round_num} 第 {r.round_num} 轮审查</h2>
+  <div class="badge-row">
+    {status_badge}
+    <span style="color:var(--muted);font-size:13px;">P0:{len(by_sev.get('critical',[]))} P1:{len(by_sev.get('high',[]))} P2:{len(by_sev.get('medium',[]))}</span>
+  </div>
+
+  <h3>2.{r.round_num}.1 五阶段扫描</h3>
+  <table class="sub-table">
+    <thead><tr><th>阶段</th><th>状态</th><th>说明</th></tr></thead>
+    <tbody>{phases_html}</tbody>
+  </table>
+
+  <h3>2.{r.round_num}.2 问题发现与修复</h3>
+  {issues_html}
+  {fixes_html}
+
+  <h3>2.{r.round_num}.3 遗留技术债务</h3>
+  {debt_html}
+
+  <h3>2.{r.round_num}.4 收敛判定</h3>
+  <p><strong>状态:</strong> {r.convergence_status}</p>
+
+  <h3>2.{r.round_num}.5 质量评级</h3>
+  {scores_html}
+
+  <h3>2.{r.round_num}.6 本轮结论</h3>
+  <div class="conclusion-box {conclusion_class}">
+    {html.escape(r.conclusion) if r.conclusion else '本轮审查完成，问题已记录。'}
   </div>
 </div>"""
 
-    def _html_confirmed_issues(self, issues: List[Dict]) -> str:
-        if not issues:
-            return ""
+    def _html_all_fixes(self, fixes: List[FixItem]) -> str:
+        rows = ""
+        for f in fixes:
+            level_class = f.level.lower() if f.level.lower() in ("p0", "p1", "p2", "p3") else "p3"
+            rows += f'<tr><td>{f.idx}</td><td>R{f.round_num if hasattr(f, "round_num") else "?"}</td><td><span class="{level_class}">{f.level}</span></td><td><code>{html.escape(f.file)}</code></td><td>{html.escape(f.problem)}</td><td>{html.escape(f.fix_method)}</td></tr>'
+        return f"""
+<div class="card">
+  <h2>3. 全部修复汇总</h2>
+  <table class="sub-table">
+    <thead><tr><th>#</th><th>轮次</th><th>级别</th><th>文件</th><th>问题</th><th>修复方式</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+  <p style="margin-top:16px;font-weight:700;color:var(--accent);font-size:16px;">总计修复: {len(fixes)} 项</p>
+</div>"""
 
-        # Group by severity
-        by_severity = {"critical": [], "high": [], "medium": [], "low": []}
-        for issue in issues:
-            sev = issue.get("severity", "low")
-            by_severity.setdefault(sev, []).append(issue)
+    def _html_final_convergence(
+        self, rounds: List[RoundReport],
+        final_scores: List[ScoreDimension], final_grade: str, final_status: str
+    ) -> str:
+        rows = ""
+        for r in rounds:
+            p0 = len([i for i in r.issues_found if i.severity == "critical"])
+            p1 = len([i for i in r.issues_found if i.severity == "high"])
+            p2 = len([i for i in r.issues_found if i.severity == "medium"])
+            p0_class = "fail" if p0 > 0 else "pass"
+            p1_class = "fail" if p1 > 0 else "pass"
+            p2_class = "warn" if p2 > 0 else "pass"
+            status_class = "pass" if r.convergence_status == "已收敛" else "warn" if "收敛" in r.convergence_status else "fail"
+            rows += f'<tr><td>第 {r.round_num} 轮</td><td class="{p0_class}">{p0}</td><td class="{p1_class}">{p1}</td><td class="{p2_class}">{p2}</td><td>{len(r.fixes_applied)}</td><td><span class="{status_class}">{r.convergence_status}</span></td></tr>'
 
-        sections = []
-        for sev in ["critical", "high", "medium", "low"]:
-            items = by_severity.get(sev, [])
-            if not items:
-                continue
-            sev_label = {"critical": "P0 严重", "high": "P1 高", "medium": "P2 中", "low": "P3 低"}.get(sev, sev)
-            border_class = self.SEVERITY_CLASS.get(sev, "p3")
-            issue_html = ""
-            for issue in items[:20]:  # Limit per severity
-                msg = html.escape(issue.get("message", "")[:200])
-                filepath = html.escape(issue.get("file_path", ""))
-                line = issue.get("line_start", 0)
-                remediation = html.escape(issue.get("remediation", "")[:200])
-                agents = ", ".join(issue.get("agents", [issue.get("agent", "unknown")]))
-                issue_html += f"""
-  <div class="problem-detail {border_class}-border">
-    <code class="file">{filepath}:{line}</code> <span style="color:var(--muted);font-size:12px;">[{html.escape(agents)}]</span><br>
-    <strong>{msg}</strong><br>
-    {f'<span style="color:var(--muted);font-size:13px;">💡 {remediation}</span>' if remediation else ''}
+        scores_html = ""
+        for s in final_scores:
+            fill_class = "fill-a" if s.score >= 80 else "fill-b" if s.score >= 60 else "fill-c" if s.score >= 40 else "fill-f"
+            val_color = "var(--green)" if s.score >= 80 else "#b8860b" if s.score >= 60 else "#fd7e14" if s.score >= 40 else "var(--red)"
+            scores_html += f"""
+  <div class="score-bar">
+    <span class="label">{html.escape(s.label)}</span>
+    <div class="bar"><div class="fill {fill_class}" style="width:{s.score}%"></div></div>
+    <span class="val" style="color:{val_color}">{s.score:.0f} {s.grade}</span>
   </div>"""
 
-            sections.append(f"""
-  <h3>{sev_label} ({len(items)} 项)</h3>
-  {issue_html}
-""")
+        circle_color = "var(--green)" if final_status == "可交付" else "#ffc107" if final_status == "需整改" else "var(--red)"
+        circle_bg = "#d4edda" if final_status == "可交付" else "#fff3cd" if final_status == "需整改" else "#f8d7da"
+        text_color = "var(--green)" if final_status == "可交付" else "#b8860b" if final_status == "需整改" else "var(--red)"
+
+        conclusion_box_class = "success" if final_status == "可交付" else "warning"
+        conclusion_text = "项目已通过多轮审查收敛，质量评级达标，可进入交付流程。" if final_status == "可交付" else "项目仍存在未收敛问题，建议继续修复后再评估。"
 
         return f"""
 <div class="card">
-  <h2>8. 确认问题详情</h2>
-  {''.join(sections)}
+  <h2>4. 最终收敛判断与结论</h2>
+
+  <h3>4.1 轮次收敛对比</h3>
+  <table>
+    <thead><tr><th>轮次</th><th>P0</th><th>P1</th><th>P2</th><th>修复项</th><th>状态</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+
+  <h3>4.2 最终质量评级</h3>
+  {scores_html}
+  <div class="rating-wrap">
+    <div class="rating-circle" style="border-color:{circle_color};color:{circle_color};background:{circle_bg}">{sum(s.score for s in final_scores)//len(final_scores) if final_scores else 0}</div>
+    <p style="margin-top:12px;font-size:18px;font-weight:700;color:{text_color}">综合评级 {final_grade} · {final_status}</p>
+  </div>
+
+  <h3>4.3 总体结论</h3>
+  <div class="conclusion-box {conclusion_box_class}">
+    {conclusion_text}
+  </div>
 </div>"""
 
     def _html_footer(self) -> str:
@@ -725,21 +535,13 @@ pre {{
     def _render_markdown(
         self,
         profile: ProjectProfile,
-        perspectives: List[AgentPerspective],
-        rounds: List[RoundSummary],
-        fixes: List[FixRecord],
-        tech_debt: List[TechDebtItem],
-        scores: List[ScoreDimension],
-        overall: tuple,
-        convergence: List[Dict],
-        result: Dict,
+        rounds: List[RoundReport],
+        all_fixes: List[FixItem],
+        final_scores: List[ScoreDimension], final_grade: str, final_status: str,
     ) -> str:
-        overall_score, overall_grade, overall_status = overall
-
         lines = []
         lines.append(f"# codespect-matrix 质检报告 — {profile.name}")
-        lines.append(f"\n> 📅 {self.date_str} | 🔧 {profile.backend_stack}")
-        lines.append(f"> ✅ 综合评级: **{overall_grade}** ({overall_score:.0f}/100) · {overall_status}")
+        lines.append(f"\n> 📅 {self.date_str} | 🔧 {profile.backend_stack} | 📊 综合评级 {final_grade} · {final_status}")
         lines.append("\n---\n")
 
         # 1. Project Profile
@@ -754,89 +556,103 @@ pre {{
         lines.append(f"| 目录结构 | {profile.directory_structure} |")
         lines.append("")
 
-        # 2. Perspective Matrix
-        lines.append("## 2. 视角审计矩阵\n")
-        lines.append("| 视角专家 | 兼容性 | P0 | P1 | P2 | 结论 |")
-        lines.append("|----------|--------|----|----|----|------|")
-        for p in perspectives:
-            new_badge = " 🆕" if p.is_new else ""
-            lines.append(f"| **{p.name}**{new_badge} | {p.compatibility:.2f} | {p.p0} | {p.p1} | {p.p2} | {p.conclusion} |")
-        lines.append("")
-
-        # 3. Rounds
-        lines.append("## 3. 逐轮扫描\n")
+        # 2. Round Reports
         for r in rounds:
-            lines.append(f"### 第 {r.round_num} 轮 — {r.status}\n")
-            lines.append(f"- P0: {r.p0} | P1: {r.p1} | P2: {r.p2} | 修复: {r.fixes_applied}")
-            for issue in r.issues[:5]:
-                sev = issue.get("severity", "low")
-                msg = issue.get("message", "")[:100]
-                filepath = issue.get("file_path", "")
-                lines.append(f"  - [{sev.upper()}] `{filepath}` — {msg}")
+            lines.append(f"## 2.{r.round_num} 第 {r.round_num} 轮审查 — {r.convergence_status}\n")
+
+            # 2.1 Five-phase scan
+            lines.append(f"### 2.{r.round_num}.1 五阶段扫描\n")
+            lines.append("| 阶段 | 状态 | 说明 |")
+            lines.append("|------|------|------|")
+            for phase in r.scan_phases:
+                status_emoji = {"pass": "✅", "warn": "⚠️", "fail": "❌", "info": "ℹ️"}.get(phase.status, "•")
+                lines.append(f"| {phase.name} | {status_emoji} {phase.status.upper()} | {phase.details} |")
             lines.append("")
 
-        # 4. Fixes
-        if fixes:
-            lines.append("## 4. 修复汇总\n")
-            lines.append("| # | 轮次 | 级别 | 文件 | 问题 | 修复 |")
-            lines.append("|---|------|------|------|------|------|")
-            for f in fixes[:30]:
-                lines.append(f"| {f.idx} | R{f.round_num} | {f.level} | `{f.file}` | {f.problem} | {f.fix_method} |")
-            lines.append(f"\n**总计修复: {len(fixes)} 项**\n")
-
-        # 5. Tech Debt
-        if tech_debt:
-            lines.append("## 5. 遗留技术债务\n")
-            lines.append("| ID | 描述 | 文件 | 建议 |")
-            lines.append("|----|------|------|------|")
-            for item in tech_debt:
-                lines.append(f"| {item.id} | {item.description} | {item.files} | {item.recommendation} |")
-            lines.append("")
-
-        # 6. Convergence
-        if convergence:
-            lines.append("## 6. 收敛判定\n")
-            lines.append("| 轮次 | P0 | P1 | P2 | 修复项 | 状态 |")
-            lines.append("|------|----|----|----|--------|------|")
-            for c in convergence:
-                lines.append(f"| {c['round']} | {c['p0']} | {c['p1']} | {c['p2']} | {c['fixes']} | {c['status']} |")
-            lines.append("")
-
-        # 7. Scores
-        lines.append("## 7. 质量评级\n")
-        for s in scores:
-            bar = "█" * int(s.score / 5) + "░" * (20 - int(s.score / 5))
-            lines.append(f"- **{s.label}**: [{bar}] {s.score:.0f}/100 ({s.grade})")
-        lines.append(f"\n**综合评级: {overall_grade} ({overall_score:.0f}/100) · {overall_status}**\n")
-
-        # 8. Confirmed Issues
-        issues = result.get("confirmed_issues", [])
-        if issues:
-            lines.append("## 8. 确认问题详情\n")
+            # 2.2 Issues
+            lines.append(f"### 2.{r.round_num}.2 问题发现与修复\n")
             by_sev = {"critical": [], "high": [], "medium": [], "low": []}
-            for issue in issues:
-                s = issue.get("severity", "low")
-                by_sev.setdefault(s, []).append(issue)
-
+            for issue in r.issues_found:
+                by_sev.setdefault(issue.severity, []).append(issue)
             for sev in ["critical", "high", "medium", "low"]:
                 items = by_sev.get(sev, [])
                 if not items:
                     continue
                 label = {"critical": "P0 严重", "high": "P1 高", "medium": "P2 中", "low": "P3 低"}.get(sev, sev)
-                lines.append(f"### {label} ({len(items)} 项)\n")
-                for issue in items[:15]:
-                    msg = issue.get("message", "")[:150]
-                    filepath = issue.get("file_path", "")
-                    line = issue.get("line_start", 0)
-                    remediation = issue.get("remediation", "")
-                    lines.append(f"- `{filepath}:{line}` — {msg}")
-                    if remediation:
-                        lines.append(f"  - 💡 {remediation[:150]}")
+                lines.append(f"#### {label} ({len(items)} 项)")
+                for issue in items:
+                    lines.append(f"- `{issue.file_path}:{issue.line_start}` **[{issue.check_name}]** {issue.message}")
+                    if issue.remediation:
+                        lines.append(f"  - 💡 {issue.remediation}")
                 lines.append("")
+
+            if r.fixes_applied:
+                lines.append(f"**本轮修复: {len(r.fixes_applied)} 项**\n")
+                lines.append("| # | 级别 | 文件 | 问题 | 修复 |")
+                lines.append("|---|------|------|------|------|")
+                for f in r.fixes_applied:
+                    lines.append(f"| {f.idx} | {f.level} | `{f.file}` | {f.problem} | {f.fix_method} |")
+                lines.append("")
+
+            # 2.3 Tech debt
+            lines.append(f"### 2.{r.round_num}.3 遗留技术债务\n")
+            if r.tech_debt:
+                lines.append("| ID | 描述 | 文件 | 建议 |")
+                lines.append("|----|------|------|------|")
+                for d in r.tech_debt:
+                    lines.append(f"| {d.id} | {d.description} | {d.files} | {d.recommendation} |")
+            else:
+                lines.append("本轮无遗留技术债务。")
+            lines.append("")
+
+            # 2.4 Convergence
+            lines.append(f"### 2.{r.round_num}.4 收敛判定\n")
+            lines.append(f"**状态: {r.convergence_status}**\n")
+
+            # 2.5 Scores
+            lines.append(f"### 2.{r.round_num}.5 质量评级\n")
+            for s in r.scores:
+                bar = "█" * int(s.score / 5) + "░" * (20 - int(s.score / 5))
+                lines.append(f"- **{s.label}**: [{bar}] {s.score:.0f}/100 ({s.grade})")
+            lines.append("")
+
+            # 2.6 Conclusion
+            lines.append(f"### 2.{r.round_num}.6 本轮结论\n")
+            lines.append(f"> {r.conclusion if r.conclusion else '本轮审查完成，问题已记录。'}\n")
+
+        # 3. All Fixes Summary
+        if all_fixes:
+            lines.append("## 3. 全部修复汇总\n")
+            lines.append("| # | 级别 | 文件 | 问题 | 修复 |")
+            lines.append("|---|------|------|------|------|")
+            for f in all_fixes:
+                lines.append(f"| {f.idx} | {f.level} | `{f.file}` | {f.problem} | {f.fix_method} |")
+            lines.append(f"\n**总计修复: {len(all_fixes)} 项**\n")
+
+        # 4. Final Convergence
+        lines.append("## 4. 最终收敛判断与结论\n")
+        lines.append("### 4.1 轮次收敛对比\n")
+        lines.append("| 轮次 | P0 | P1 | P2 | 修复项 | 状态 |")
+        lines.append("|------|----|----|----|--------|------|")
+        for r in rounds:
+            p0 = len([i for i in r.issues_found if i.severity == "critical"])
+            p1 = len([i for i in r.issues_found if i.severity == "high"])
+            p2 = len([i for i in r.issues_found if i.severity == "medium"])
+            lines.append(f"| 第 {r.round_num} 轮 | {p0} | {p1} | {p2} | {len(r.fixes_applied)} | {r.convergence_status} |")
+        lines.append("")
+
+        lines.append("### 4.2 最终质量评级\n")
+        for s in final_scores:
+            bar = "█" * int(s.score / 5) + "░" * (20 - int(s.score / 5))
+            lines.append(f"- **{s.label}**: [{bar}] {s.score:.0f}/100 ({s.grade})")
+        lines.append(f"\n**综合评级: {final_grade} · {final_status}**\n")
+
+        lines.append("### 4.3 总体结论\n")
+        conclusion_text = "项目已通过多轮审查收敛，质量评级达标，可进入交付流程。" if final_status == "可交付" else "项目仍存在未收敛问题，建议继续修复后再评估。"
+        lines.append(f"> {conclusion_text}\n")
 
         lines.append("---\n")
         lines.append(f"*报告由 codespect-matrix 自动生成 | {self.timestamp}*")
-
         return "\n".join(lines)
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -845,28 +661,16 @@ pre {{
 
     @staticmethod
     def _to_grade(score: float) -> str:
-        if score >= 97:
-            return "A+"
-        if score >= 93:
-            return "A"
-        if score >= 90:
-            return "A-"
-        if score >= 87:
-            return "B+"
-        if score >= 83:
-            return "B"
-        if score >= 80:
-            return "B-"
-        if score >= 77:
-            return "C+"
-        if score >= 73:
-            return "C"
-        if score >= 70:
-            return "C-"
-        if score >= 60:
-            return "D+"
-        if score >= 50:
-            return "D"
-        if score >= 40:
-            return "D-"
+        if score >= 97: return "A+"
+        if score >= 93: return "A"
+        if score >= 90: return "A-"
+        if score >= 87: return "B+"
+        if score >= 83: return "B"
+        if score >= 80: return "B-"
+        if score >= 77: return "C+"
+        if score >= 73: return "C"
+        if score >= 70: return "C-"
+        if score >= 60: return "D+"
+        if score >= 50: return "D"
+        if score >= 40: return "D-"
         return "F"
