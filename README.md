@@ -1,17 +1,17 @@
 <p align="center">
   <h1 align="center">codespect-matrix</h1>
-  <p align="center"><strong>Multi-Agent Code Evolution Platform</strong></p>
+  <p align="center"><strong>Multi-Agent Code Evolution Platform with Deep Taint Analysis</strong></p>
   <p align="center">
-    <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
+    <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version">
     <img src="https://img.shields.io/badge/python-3.10+-green" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="License">
     <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Status">
-    <img src="https://img.shields.io/badge/agents-16-orange" alt="Agents">
-    <img src="https://img.shields.io/badge/tests-82%20passed-success" alt="Tests">
+    <img src="https://img.shields.io/badge/agents-20+-orange" alt="Agents">
+    <img src="https://img.shields.io/badge/tests-112%20passed-success" alt="Tests">
     <img src="https://img.shields.io/badge/coverage-59%25-yellow" alt="Coverage">
   </p>
   <p align="center">
-    Multi-Agent · Debate Review · Hybrid Engine · Code Evolution
+    CPG Taint Analysis · 10-Stage Pipeline · Debate Review · Harness Engineering · Self-Evolution
   </p>
   <p align="center">
     🌐 <a href="README_zh.md">中文</a>
@@ -22,7 +22,7 @@
 
 ## What is codespect-matrix?
 
-> Not just another linter. **codespect-matrix** is a virtual QA team — 16 specialized AI agents that conduct **debate-style code review**, cross-validate every finding, and converge on a final verdict. It learns across projects and gets smarter with every scan.
+> Not just another linter. **codespect-matrix** is a virtual QA team — 20+ specialized AI agents that conduct **debate-style code review** across a **10-stage pipeline**, cross-validate every finding through a **Harness verification engine**, and perform **deep taint analysis** via Code Property Graph to track vulnerabilities across function boundaries.
 
 ---
 
@@ -30,16 +30,19 @@
 
 | Traditional QA | codespect-matrix |
 |---|---|
-| Single-dimension (linter / coverage) | 16 agents in joint debate review |
+| Single-dimension (linter / coverage) | 20+ agents in joint debate review |
 | Rigid rules, heavy config | AI agents auto-adapt to project characteristics |
+| Surface-level pattern matching | **CPG Deep Taint Analysis** — AST + Call Graph + Data Flow tracking |
+| No runtime awareness | **Dynamic Analysis** — DB schema, API contract, smoke testing |
 | Reports issues without fixes | Every issue includes remediation + auto-fix plan |
 | One-and-done scan | **Convergence loop** — repeats until no new findings |
-| No CI integration | `--ci` exit code + JSON, ready for GitHub Actions |
+| No quality verification gates | **Harness Engineering** — constraint enforcement, drift detection, auto-recovery |
 | Can't quantify quality changes | `--evolve` health dashboard + `--evolve-baseline` trend tracking |
-| Generic, domain-agnostic | Built-in PHI / HIPAA / medical data specialties |
+| Generic, domain-agnostic | Built-in PHI / HIPAA / FHIR / DICOM / HL7 / CDS medical specialties |
 | Starts fresh every time | **Dual memory** — project memory + global knowledge base |
+| No self-improvement | **SelfEvolver** — learns from QA→Fix→ReQA cycles across projects |
 
-**Flow**: Scan → Agent auto-selection → Parallel inspection → Cross-review → Debate ruling → Convergence → Code Evolution.
+**Pipeline**: CPG Pre-scan → Agent Selection → Parallel Inspection → Harness Validation → Cross-Review → Harness Verification → Debate Arbitration → Convergence Detection → Drift Detection → Fix Generation → Evolution Report
 
 ---
 
@@ -51,7 +54,7 @@ git clone https://github.com/zhouliang-sjtu/codespect-matrix.git
 cd codespect-matrix
 pip install -e .
 
-# Default multi-agent review
+# Default multi-agent review (10-stage pipeline)
 codespect-matrix
 
 # CI gate
@@ -71,36 +74,77 @@ codespect-matrix --max-rounds 10 --output report.md
 
 ## Architecture
 
-### Agent Roster
+### 10-Stage Pipeline
+
+| Phase | Stage | Mechanism |
+|-------|-------|-----------|
+| **0** | **CPG Pre-scan** | Code Property Graph: AST + Call Graph + Data Flow + Taint Analysis. Pure Python, zero dependencies. |
+| **1** | **Agent Selection** | Project profile + global KB → auto-select most relevant agents |
+| **2** | **Parallel Inspection** | All agents scan independently (rule+LLM for security/healthcare) |
+| **3** | **Harness Validation** | Constraint enforcement — consistency checks, evidence quality assessment |
+| **4** | **Cross-Review** | Each finding cross-validated by agents from different domains |
+| **5** | **Harness Verification** | Cross-phase verification, feedback routing, agent error recovery |
+| **6** | **Debate Arbitration** | Disputed findings → challenge → defense → Orchestrator ruling (max 3 rounds) |
+| **7** | **Convergence Detection** | 2 consecutive rounds with no new findings → auto-terminate |
+| **8** | **Drift Detection** | Quality trend analysis against historical baseline |
+| **9** | **Fix Generation** | Confirmed issues → auto-fix proposals with backup |
+| **10** | **Evolution Report** | Health score + technical debt + architecture + roadmap |
+
+### CPG Deep Taint Analysis
+
+The **Code Property Graph** pre-scan elevates codespect-matrix from pattern matching to semantic program analysis:
+
+| Component | Capability |
+|-----------|-----------|
+| **AST Parsing** | Extract all functions, classes, imports, variable definitions |
+| **Call Graph** | Map inter-function call dependencies |
+| **Data Flow Graph** | Track variable definition → use chains |
+| **Taint Analysis** | Trace untrusted input → dangerous sink across function boundaries |
+
+**Detected vulnerability chains**: SQL injection (user_input → execute), PHI leaks (patient_data → log/output), path traversal (user_input → open()), cross-function attack vectors.
+
+### Agent Roster (20+ agents)
 
 | Agent | Engine | Focus |
 |---|---|---|
-| security | Rule+LLM | Vulnerabilities, injection, weak crypto, secrets |
-| healthcare | Rule+LLM | HIPAA compliance, patient data protection |
-| phi_protection | Rule+LLM | PHI detection, ID leaks, data masking |
-| compliance | Rule+LLM | License compliance, GDPR audit |
-| medical_data | Rule+LLM | ICD coding, blood pressure/SpO2 validation |
-| developer | Pure LLM | Type safety, error handling, code quality |
-| architect | Pure LLM | Circular dependencies, module coupling |
-| performance | Pure LLM | N+1 queries, memory bombs, blocking I/O |
-| devops | Pure LLM | Observability, health checks, graceful shutdown |
-| testing | Pure LLM | Test coverage, testability |
-| api | Pure LLM | REST conventions, rate limiting, auth |
-| dependency | Pure LLM | Dependency versions, CVE scanning |
-| concurrency | Pure LLM | Race conditions, deadlocks, thread safety |
-| linter | Subprocess+LLM | Ruff, mypy, flake8 runner with LLM interpretation |
-| datascience | Pure LLM | Statistical modeling, data integrity, overfitting detection |
-| hardcode | Pure LLM | Hardcoded values, magic numbers, cross-file duplicates |
+| **security** | Rule+LLM | Vulnerabilities, injection, weak crypto, secrets |
+| **healthcare** | Rule+LLM | HIPAA compliance, patient data protection |
+| **phi_protection** | Rule+LLM | PHI detection, ID leaks, data masking |
+| **compliance** | Rule+LLM | License compliance, GDPR audit |
+| **medical_data** | Rule+LLM | ICD coding, blood pressure/SpO2 validation |
+| **fhir** | Rule+LLM | FHIR R4 resource validation, SMART on FHIR auth |
+| **dicom** | Rule+LLM | DICOM tag validation, PHI tag detection |
+| **hl7** | Rule+LLM | HL7 v2 message security, MLLP transport |
+| **cds** | Rule+LLM | Clinical decision support rule safety, fallback checks |
+| **developer** | Pure LLM | Type safety, error handling, code quality |
+| **architect** | Pure LLM | Circular dependencies, module coupling, God module |
+| **performance** | Pure LLM | N+1 queries, memory bombs, blocking I/O |
+| **devops** | Pure LLM | Observability, health checks, graceful shutdown |
+| **testing** | Pure LLM | Test coverage, testability |
+| **api** | Pure LLM | REST conventions, rate limiting, auth |
+| **dependency** | Pure LLM | Dependency versions, CVE scanning |
+| **concurrency** | Pure LLM | Race conditions, deadlocks, thread safety |
+| **linter** | Subprocess+LLM | Ruff, mypy, flake8 runner with LLM interpretation |
+| **datascience** | Pure LLM | Statistical modeling, data integrity, overfitting |
+| **hardcode** | Pure LLM | Hardcoded values, magic numbers, cross-file duplicates |
+| **db_compatibility** | Static | SQL dialect incompatibilities (MySQL↔PostgreSQL↔SQLite) |
+| **db_schema** | Dynamic | ORM model vs actual database schema consistency |
+| **api_contract** | Static+Dynamic | OpenAPI schema validation, FastAPI parameter boundaries |
+| **smoke_test** | Dynamic | Health check endpoints, API availability testing |
 
-### 5-Phase Review Workflow
+> Dynamic analysis agents auto-activate based on project characteristics — no manual configuration needed.
 
-| Phase | Mechanism |
-|---|---|
-| 0. Select | Project profile + global KB → auto-select 5-8 most relevant agents |
-| 1. Inspect | All agents scan in parallel (security/healthcare use rule+LLM dual engine) |
-| 2. Review | Each finding cross-validated by agents from different domains |
-| 3. Debate | Disputed findings → challenge → defense → Orchestrator ruling |
-| 4. Converge | 2 consecutive rounds with no new findings → auto-terminate |
+### Harness Engineering
+
+> *"Agent = Model + Harness" — Human Steer, Agent Execute*
+
+| Feature | Mechanism |
+|---------|-----------|
+| **Constraint Validation** | Severity alignment check, evidence quality assessment |
+| **Cross-Phase Verification** | Inspect → Review → Verify → Output consistency chain |
+| **Feedback Routing** | Review results feed back to improve agent inspection |
+| **Auto-Recovery** | Failed agent retry, fallback to rule-only mode |
+| **Drift Detection** | Compare results against baseline, alert quality degradation |
 
 ### Code Evolution Dashboard
 
