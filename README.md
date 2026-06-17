@@ -2,7 +2,7 @@
   <h1 align="center">codespect-matrix</h1>
   <p align="center"><strong>Multi-Agent Code Evolution Platform with Deep Taint Analysis</strong></p>
   <p align="center">
-    <img src="https://img.shields.io/badge/version-3.0.0-blue" alt="Version">
+    <img src="https://img.shields.io/badge/version-4.0.0-blue" alt="Version">
     <img src="https://img.shields.io/badge/python-3.10+-green" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="License">
     <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Status">

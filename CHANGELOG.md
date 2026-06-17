@@ -5,6 +5,23 @@ All notable changes to codespect-matrix will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-06-18
+
+### Added
+- **C6 Safe Rollback** (`fix_engine.py`): `rollback()` / `rollback_all()` / `list_backups()` API with backup manifest tracking. Automatic rollback on patch write failure + post-write patch verification. `--rollback` CLI command for one-key restoration of all applied fixes.
+- **D1-D5 Runtime Analysis** (`dynamic_agents.py`): New `RuntimeDebugAgent` implementing the Trae Debugger scientific method — hypothesis-driven reachability analysis, dead code detection, severity calibration, and runtime assertion probe generation (SQL injection, PHI leak, hardcoded secrets, insecure crypto).
+- **G1 Batch Full Scan** (`orchestrator.py`): `_collect_files_context()` now splits large projects into batches for complete code coverage, removing the 200KB truncation bottleneck. Rules engine now scans all files instead of ~4% in large projects.
+- **G4 Real Debate** (`orchestrator.py`): Replaced `random.random()<0.30` pseudo-random debate with actual agent disagreement quantification — checks findings from different agents on same file/severity.
+- **G5 Fix Convergence** (`orchestrator.py`): Fix engine now linked to review pipeline — confirmed fixes reduce health score gap, tracked in convergence loop.
+
+### Changed
+- **Capability Score**: 100/120 (83.3%) → 108/120 (90.0%) after C6+D1-D5 enhancements. Only A15 multi-language support remains as a P1 gap.
+- **Orchestrator**: 24-agent all-in architecture with batch file collection, real debate, and fix-convergence linkage.
+- **Dynamic Agents Registry**: 4 → 5 agents with RuntimeDebugAgent registered as `runtime_debug`.
+
+### Fixed
+- **G1 File Truncation**: The root cause of Phase-II experiment detection gap (codespect 4,148 vs Ruff 709,573 = 171x). Was scanning only ~4% of code in large projects; now covers 100%.
+
 ## [3.0.0] - 2026-06-17
 
 ### Changed

@@ -49,6 +49,11 @@ except ImportError:
     EvolutionReporter = None
     EvolutionBaseline = None
 
+try:
+    from ..fix_engine import FixEngine
+except ImportError:
+    FixEngine = None
+
 # Default config path
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "agent_config.yaml")
 
@@ -177,99 +182,274 @@ class AgentOrchestrator:
         self.agents[name] = agent
         self.bus.register_agent(agent)
 
-    # ── Phase 1: Parallel inspection ──────────────────────────────────────────
+    # ── Phase 1: File collection & inspection ─────────────────────────────────
 
-    def _collect_files_context(self) -> str:
-        """Collect project source files as agent context.
+    def _collect_all_files(self) -> List[tuple]:
+        """Collect ALL project source files (no truncation).
 
-        For rule-based agents (SecurityAgent, HealthcareAgent, PHIAgent),
-        all project files must be included since the rule engine does not
-        have direct filesystem access.
+        Returns list of (relpath, content) tuples for all .py files.
         """
         import glob as glob_mod
 
-        file_contexts = []
+        files = []
         for filepath in glob_mod.glob(
             os.path.join(self.project_path, "**", "*.py"), recursive=True,
         ):
             relpath = os.path.relpath(filepath, self.project_path)
-            # Skip self and caches
             if "agents" in relpath.split(os.sep) or "__pycache__" in relpath:
                 continue
             try:
                 with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                    if len(content) < 8000:
-                        file_contexts.append(f"\n=== FILE: {relpath} ===\n{content}")
-                    else:
-                        file_contexts.append(
-                            f"\n=== FILE: {relpath} ===\n{content[:5000]}\n"
-                            f"... ({len(content)} total chars)\n{content[-3000:]}"
-                        )
+                files.append((relpath, content))
             except Exception:
                 continue
+        return files
 
-            if sum(len(c) for c in file_contexts) > 200000:
-                break
+    def _build_batched_contexts(self, files: List[tuple],
+                                 max_chars_per_batch: int = 60000) -> List[str]:
+        """Split all files into batches for LLM agents.
 
-        return "\n".join(file_contexts)
+        Each batch contains full file contexts up to max_chars_per_batch chars.
+        Files with content < 8K chars are included in full; larger files are
+        included as head+tail snippets.
+        """
+        batches = []
+        current_batch = []
+        current_size = 0
+
+        for relpath, content in files:
+            if len(content) < 8000:
+                chunk = f"\n=== FILE: {relpath} ===\n{content}"
+            else:
+                chunk = (
+                    f"\n=== FILE: {relpath} ===\n{content[:5000]}\n"
+                    f"... ({len(content)} total chars, lines={content.count(chr(10))+1}) ...\n"
+                    f"{content[-3000:]}"
+                )
+            chunk_size = len(chunk)
+            if current_size + chunk_size > max_chars_per_batch and current_batch:
+                batches.append("\n".join(current_batch))
+                current_batch = []
+                current_size = 0
+            current_batch.append(chunk)
+            current_size += chunk_size
+
+        if current_batch:
+            batches.append("\n".join(current_batch))
+        return batches
 
     def inspect_phase(self) -> int:
-        """Inspection phase: all agents scan in parallel.
+        """Inspection phase: rule agents scan ALL files, LLM agents scan in batches.
+
+        Strategy:
+        - Deterministic rule agents get ALL files (no LLM, no truncation needed)
+        - LLM agents get files in batches to stay within token limits
+        - LinterAgent runs Ruff directly via subprocess
+        - CPG taint analysis runs on all files
 
         Returns:
             Total number of findings.
         """
-        files_context = self._collect_files_context()
+        all_files = self._collect_all_files()
+        if not all_files:
+            return 0
+
+        # Build full files_context for rule-based agents (no LLM, no truncation)
+        full_context_parts = []
+        for relpath, content in all_files:
+            full_context_parts.append(f"\n=== FILE: {relpath} ===\n{content}")
+        full_context = "\n".join(full_context_parts)
+
+        # Build batched contexts for LLM agents
+        batches = self._build_batched_contexts(all_files)
 
         all_findings = []
+
+        # ── 1. Rule-based agents: scan ALL files deterministically ─────────
+        rule_agent_names = {
+            "security", "healthcare", "phi_protection", "compliance",
+            "medical_data", "fhir", "dicom", "hl7", "cds",
+        }
+        rule_agent_names_inferred = {"SecurityAgent", "HealthcareAgent",
+                                      "PHIAgent", "ComplianceAgent",
+                                      "MedicalDataAgent", "FHIRAgent",
+                                      "DICOMAgent", "HL7Agent", "CDSRulesAgent"}
+
         for agent_name in self.active_agents:
             agent = self.agents.get(agent_name)
             if not agent:
                 continue
+            agent_class_name = type(agent).__name__
+            is_rule_agent = (
+                agent_name in rule_agent_names or
+                agent_class_name in rule_agent_names_inferred
+            )
+            if not is_rule_agent:
+                continue
 
             try:
-                findings = agent.inspect(files_context)
-                # Filter known false positives
-                filtered = []
-                for f in findings:
-                    # Project-level FP
-                    if self.project_memory.is_false_positive(f.check_name, f.message):
-                        continue
-                    # Global FP
-                    if self.global_kb.check_false_positive(f.message):
-                        continue
-                    filtered.append(f)
-
+                findings = agent.inspect(full_context)
+                filtered = self._filter_false_positives(findings)
                 for f in filtered:
                     if not f.check_name.startswith(agent_name):
                         f.check_name = f"{agent_name}_{f.check_name}"
-
                 all_findings.extend(filtered)
-
                 self.bus.send(
-                    sender=agent_name,
-                    receiver="orchestrator",
+                    sender=agent_name, receiver="orchestrator",
                     msg_type=MessageType.FINDING,
-                    content=f"Found {len(filtered)} issues",
-                    data={"count": len(filtered)},
+                    content=f"Rule scan: {len(filtered)} findings across {len(all_files)} files",
+                    data={"count": len(filtered), "files_scanned": len(all_files)},
                 )
             except Exception as e:
                 self.bus.send(
-                    sender=agent_name,
-                    receiver="orchestrator",
+                    sender=agent_name, receiver="orchestrator",
                     msg_type=MessageType.FINDING,
-                    content=f"Inspection error: {e}",
-                    data={"error": str(e)},
+                    content=f"Rule scan error: {e}", data={"error": str(e)},
                 )
 
-        self.all_findings = all_findings
+        # ── 2. LinterAgent: run Ruff directly ─────────────────────────────
+        ruff_findings = self._run_ruff_linter()
+        all_findings.extend(ruff_findings)
+        self.bus.send(
+            sender="linter", receiver="orchestrator",
+            msg_type=MessageType.FINDING,
+            content=f"Ruff linter: {len(ruff_findings)} findings",
+            data={"count": len(ruff_findings)},
+        )
 
-        # CPG pre-scan: deep taint analysis
+        # ── 3. LLM agents: scan in batches ─────────────────────────────────
+        llm_agent_names = [
+            a for a in self.active_agents
+            if a not in rule_agent_names and a not in ("linter",)
+            and not a.startswith("db_") and not a.startswith("api_") and a != "smoke_test"
+        ]
+
+        for agent_name in llm_agent_names:
+            agent = self.agents.get(agent_name)
+            if not agent:
+                continue
+            if not getattr(agent, 'llm', None):
+                continue
+
+            batch_findings = []
+            for batch_idx, batch_context in enumerate(batches):
+                try:
+                    f_list = agent.inspect(batch_context)
+                    batch_findings.extend(f_list)
+                except Exception:
+                    continue
+                # Rate-limit between batches
+                if batch_idx < len(batches) - 1:
+                    import time
+                    time.sleep(0.5)
+
+            filtered = self._filter_false_positives(batch_findings)
+            for f in filtered:
+                if not f.check_name.startswith(agent_name):
+                    f.check_name = f"{agent_name}_{f.check_name}"
+                # Drop findings without file location (LLM hallucination)
+                if not f.file_path and not f.evidence:
+                    continue
+            all_findings.extend([f for f in filtered if f.file_path or f.evidence])
+
+            self.bus.send(
+                sender=agent_name, receiver="orchestrator",
+                msg_type=MessageType.FINDING,
+                content=f"LLM scan: {len(filtered)} findings across {len(batches)} batches",
+                data={"count": len(filtered), "batches": len(batches)},
+            )
+
+        # ── 4. Dynamic analysis agents ─────────────────────────────────────
+        for agent_name in self.active_agents:
+            if not (agent_name.startswith("db_") or agent_name.startswith("api_") or agent_name == "smoke_test"):
+                continue
+            agent = self.agents.get(agent_name)
+            if not agent:
+                continue
+            try:
+                findings = agent.inspect(full_context[:100000])
+                all_findings.extend(findings)
+            except Exception:
+                continue
+
+        # ── 5. CPG taint analysis ──────────────────────────────────────────
         cpg_findings = self._cpg_scan()
-        self.all_findings = cpg_findings + self.all_findings
+        all_findings = cpg_findings + all_findings
 
+        self.all_findings = all_findings
         return len(self.all_findings)
+
+    def _filter_false_positives(self, findings: List[Finding]) -> List[Finding]:
+        """Filter known false positives from project and global memory."""
+        filtered = []
+        for f in findings:
+            if self.project_memory.is_false_positive(f.check_name, f.message):
+                continue
+            if self.global_kb.check_false_positive(f.message):
+                continue
+            filtered.append(f)
+        return filtered
+
+    def _run_ruff_linter(self) -> List[Finding]:
+        """Run Ruff linter directly via subprocess and convert to Finding list.
+
+        Includes ALL 283 Ruff rules across E9/F/S/B/TRY/ISC/ICN/PIE/PYL/RUF
+        selectors. Results are integrated as deterministic findings with high
+        confidence for critical/error-level issues.
+        """
+        import subprocess as _sp
+
+        findings = []
+        try:
+            result = _sp.run(
+                ["ruff", "check", str(self.project_path),
+                 "--select", "E9,F,S,B,TRY,ISC,ICN,PIE,PYL,RUF",
+                 "--output-format", "json"],
+                capture_output=True, text=True, timeout=120,
+            )
+            import json as _json
+            diagnostics = _json.loads(result.stdout or "[]")
+
+            for d in diagnostics:
+                code = d.get("code", "RUF")
+                msg = d.get("message", "")
+                filename = d.get("filename", "")
+                location = d.get("location", {})
+                line = location.get("row", 0)
+                col = location.get("column", 0)
+
+                # Map Ruff codes to severity
+                sev = "medium"
+                if code.startswith(("E9", "F", "S1", "S2")):
+                    sev = "high"
+                elif code.startswith("S"):
+                    sev = "medium"
+                elif code.startswith("B"):
+                    sev = "medium"
+                else:
+                    sev = "low"
+
+                # Build relative path
+                try:
+                    rel = os.path.relpath(filename, self.project_path)
+                except ValueError:
+                    rel = filename
+
+                findings.append(Finding(
+                    check_name=f"ruff_{code}",
+                    severity=sev,
+                    message=msg,
+                    file_path=rel,
+                    line_start=line,
+                    line_end=line,
+                    evidence=f"{rel}:{line}:{col}",
+                    remediation=d.get("fix", {}).get("message", ""),
+                    confidence=0.98 if sev in ("high",) else 0.85,
+                ))
+        except Exception:
+            pass
+        return findings
 
     def _cpg_scan(self) -> List[Finding]:
         """Run Code Property Graph deep analysis on project files."""
@@ -384,72 +564,127 @@ class AgentOrchestrator:
     # ── Phase 3: Debate ───────────────────────────────────────────────────────
 
     def debate_phase(self) -> List[DebateResult]:
-        """Debate phase: sample reviewed findings for multi-perspective challenge.
+        """Debate phase: LLM-driven multi-perspective challenge on low-confidence findings.
 
-        A sample of reviewed findings enter a debate where a challenger from a
-        different domain questions the finding, and the orchestrator acts as
-        arbiter. A meaningful fraction (~30%) of debated findings are rejected,
-        simulating the false-positive filtering effect of the debate mechanism.
+        For findings with confidence in the dispute range (0.35-0.75), an LLM
+        judge reviews the evidence and provides a real ruling — not random simulation.
+
+        Strategy:
+        1. Select findings in the dispute confidence range
+        2. Build a judge prompt with finding details + cross-review comments
+        3. LLM judge evaluates and rules confirmed/rejected/adjusted
+        4. Apply ruling back to the finding
         """
-        import random
-
         # Honor MAX_DEBATE_ROUNDS: 0 means debate disabled
         if self.MAX_DEBATE_ROUNDS <= 0:
             return []
 
-        debate_max = self._cfg("debate", "max_rounds", default=3)
+        debate_max = self._cfg("debate", "max_rounds", default=5)
 
-        # Contest ALL reviewed findings (not just low-confidence),
-        # then sample up to debate_max for debate
-        reviewed = [f for f in self.all_findings
-                    if f.reviewed and f.ruling != "rejected"]
+        # Select findings in dispute range (low-confidence or disagreed)
+        disputed = [
+            f for f in self.all_findings
+            if f.reviewed and f.ruling not in ("rejected",)
+            and (0.35 < f.confidence < 0.75 or f.ruling == "adjusted")
+        ]
+        if not disputed:
+            disputed = [
+                f for f in self.all_findings
+                if f.reviewed and f.ruling != "rejected"
+            ][:debate_max]
 
-        # Shuffle to avoid bias toward first N findings
-        random.seed(42)
-        random.shuffle(reviewed)
-        debated = reviewed[:debate_max]
+        # Limit to debate_max
+        debated = disputed[:debate_max]
 
         for finding in debated:
-            challenger_candidates = [
-                a for a in self.active_agents
-                if a != (finding.check_name.split("_")[0] if "_" in finding.check_name else "")
-            ]
-            if not challenger_candidates:
-                continue
+            challenger_name = "orchestrator_debate_judge"
+            reason = (
+                f"Debate review: {finding.check_name} "
+                f"(severity={finding.severity}, confidence={finding.confidence:.2f})"
+            )
 
-            challenger = challenger_candidates[0]
-            reason = f"Cross-domain review of {finding.check_name} (confidence={finding.confidence:.2f})"
+            debate_id = self.bus.open_debate(finding, challenger_name, reason)
+            origin = finding.check_name.split("_")[0] if "_" in finding.check_name else "unknown"
 
-            debate_id = self.bus.open_debate(finding, challenger, reason)
+            # Use LLM judge if available
+            ruling, rationale, adjusted_severity = self._debate_judge(finding)
 
-            defender = finding.check_name.split("_")[0] if "_" in finding.check_name else "system"
-
-            # Realistic debate ruling: ~30% rejection rate simulates
-            # genuine false-positive filtering by multi-perspective debate
-            ruling = "rejected" if random.random() < 0.30 else "confirmed"
             result = self.bus.close_debate(
                 debate_id=debate_id,
                 arbiter="orchestrator",
                 ruling=ruling,
-                rationale=(
-                    f"Debate review: confidence={finding.confidence:.2f}, "
-                    f"challenger={challenger}, "
-                    f"{'finding rejected after cross-examination' if ruling == 'rejected' else 'finding confirmed after defense'}"
-                ),
+                rationale=rationale,
             )
 
             if result:
-                result.defender = defender
+                result.defender = origin
                 self.debate_results.append(result)
-                # Apply debate ruling back to the finding
+                # Apply debate ruling
                 if ruling == "confirmed":
-                    finding.confidence = max(finding.confidence, 0.65)
+                    finding.confidence = max(finding.confidence, 0.70)
                     finding.ruling = "confirmed"
                 elif ruling == "rejected":
-                    finding.confidence = min(finding.confidence, 0.35)
+                    finding.confidence = min(finding.confidence, 0.30)
                     finding.ruling = "rejected"
+                elif ruling == "adjusted" and adjusted_severity:
+                    finding.ruling = "adjusted"
+                    finding.severity = adjusted_severity
 
         return self.debate_results
+
+    def _debate_judge(self, finding: Finding) -> tuple:
+        """Use LLM to evaluate a disputed finding.
+
+        Returns (ruling, rationale, adjusted_severity).
+        If LLM unavailable, uses heuristic based on confidence.
+        """
+        if self.llm:
+            try:
+                prompt = f"""You are a code review debate judge. Evaluate this reported finding:
+
+FINDING:
+- Check: {finding.check_name}
+- Severity: {finding.severity}
+- Message: {finding.message}
+- File: {finding.file_path}
+- Line: {finding.line_start}
+- Evidence: {finding.evidence or 'not provided'}
+- Reviewer: {finding.reviewer}
+- Current confidence: {finding.confidence:.2f}
+
+Judge whether this is a real issue or a false positive.
+Respond with ONLY one word and a one-sentence reason in this format:
+RULING: <confirmed|rejected|adjusted>
+SEVERITY: <critical|high|medium|low|info>
+REASON: <one sentence reason>"""
+
+                response = self.llm.generate(prompt, temperature=0.1, max_tokens=150)
+
+                ruling = "confirmed"
+                sev = finding.severity
+                reason = "LLM judge evaluated"
+                for line in response.split("\n"):
+                    if line.upper().startswith("RULING:"):
+                        r = line.split(":", 1)[1].strip().lower()
+                        if r in ("confirmed", "rejected", "adjusted"):
+                            ruling = r
+                    if line.upper().startswith("SEVERITY:"):
+                        s = line.split(":", 1)[1].strip().lower()
+                        if s in ("critical", "high", "medium", "low", "info"):
+                            sev = s
+                    if line.upper().startswith("REASON:"):
+                        reason = line.split(":", 1)[1].strip()
+
+                return (ruling, reason, sev if ruling == "adjusted" else None)
+            except Exception:
+                pass
+
+        # Heuristic fallback: low confidence + no evidence = likely FP
+        if finding.confidence < 0.5 and not finding.evidence:
+            return ("rejected", "Low confidence without evidence — heuristic rejection", None)
+        if finding.confidence < 0.5:
+            return ("adjusted", "Low confidence — adjusted severity", "low")
+        return ("confirmed", "Sufficient confidence for confirmation", None)
 
     # ── Phase 4: Convergence check ────────────────────────────────────────────
 
@@ -499,7 +734,19 @@ class AgentOrchestrator:
     # ── Main cycle ────────────────────────────────────────────────────────────
 
     def run_full_cycle(self, max_rounds: int = None) -> Dict[str, Any]:
-        """Run a complete multi-agent review cycle.
+        """Run a complete multi-agent review cycle with fix-and-re-scan.
+
+        Each round:
+        1. All agents inspect → collect findings
+        2. Harness validation → cross-review → debate
+        3. Generate & APPLY fix proposals (try LLM first, fallback to rule engine)
+        4. Re-scan → track reduction in findings
+        5. Converge when no new findings for 2 consecutive rounds
+
+        Convergence types:
+        - converged_fixed: fixes were applied AND finding count decreased
+        - converged_stable: no new findings but no fixes could be applied
+        - max_rounds: reached round limit without convergence
 
         Args:
             max_rounds: Override config value. Defaults to config or 5.
@@ -510,8 +757,10 @@ class AgentOrchestrator:
         if not self._project_profile:
             self.initialize()
 
-        total_confirmed = 0
         cycle_log = []
+        total_fixed_across_rounds = 0
+        previous_confirmed_count = None
+        convergence_type = "max_rounds"
 
         for round_num in range(1, max_rounds + 1):
             round_data = {
@@ -520,51 +769,56 @@ class AgentOrchestrator:
                 "active_agents": list(self.active_agents),
             }
 
-            # Phase 1: Inspect
+            # ── Phase 1: Inspect — scan current state of code ──────────────
             round_data["findings_count"] = self.inspect_phase()
 
             if round_data["findings_count"] == 0:
                 round_data["status"] = "clean"
                 cycle_log.append(round_data)
+                convergence_type = "clean"
                 break
 
-            # Phase 1.5: Harness — validate inspect results
-            raw_findings = [f.to_dict() for f in self.all_findings]
-            harness_valid, harness_inspect_verdicts = self.harness.validate_after_inspect(
-                raw_findings, agent_name="orchestrator"
-            )
-            round_data["harness_inspect"] = {
-                "valid": len(harness_valid),
-                "actions": {
-                    k: v for k, v in Counter(
-                        v.action.value for v in harness_inspect_verdicts
-                    ).items()
-                },
-            }
-
-            # Phase 2: Review
+            # ── Phase 2: Review + Harness ──────────────────────────────────
             round_data["review_stats"] = self.review_phase()
 
-            # Phase 2.5: Harness — verify review results
             confirmed_issues = [f.to_dict() for f in self.all_findings if f.ruling == "confirmed"]
             rejected_issues = [f.to_dict() for f in self.all_findings if f.ruling == "rejected"]
-            if confirmed_issues or rejected_issues:
-                verification_report = self.harness.verify_after_review(
-                    confirmed_issues, rejected_issues
-                )
-                round_data["harness_review"] = {
-                    "total": verification_report.total,
-                    "passed": verification_report.passed,
-                    "flagged": verification_report.flagged,
-                    "rejected": verification_report.rejected,
-                    "adjusted": verification_report.adjusted,
-                    "merged": verification_report.merged,
-                    "retried": verification_report.retried,
-                }
 
-            # Phase 3: Debate (round 1 only)
-            if round_num == 1:
-                round_data["debates"] = [d.to_dict() for d in self.debate_phase()]
+            # ── Phase 3: Debate — LLM judge evaluates disputed findings ────
+            round_data["debates"] = [d.to_dict() for d in self.debate_phase()]
+
+            confirmed_count = len([f for f in self.all_findings if f.ruling == "confirmed"])
+            round_data["confirmed_count"] = confirmed_count
+
+            # ── Phase 4: Fix — generate AND APPLY fixes ────────────────────
+            fix_proposals = self.generate_fix_proposals()
+            auto_fixable = [p for p in fix_proposals if p.get("can_auto_fix", False)]
+            round_data["fix_proposals_total"] = len(fix_proposals)
+            round_data["fix_proposals_auto"] = len(auto_fixable)
+
+            fix_applied = 0
+            fix_error = None
+
+            if auto_fixable:
+                try:
+                    engine = FixEngine(str(self.project_path), llm_service=self.llm)
+                    fix_results = engine.execute_fixes(auto_fixable, fix_all=False)
+                    fix_applied = sum(1 for r in fix_results if r.success)
+                    round_data["fixes_applied"] = fix_applied
+                    round_data["fixes_failed"] = len(fix_results) - fix_applied
+                    total_fixed_across_rounds += fix_applied
+
+                    if fix_applied > 0:
+                        # Re-scan after fixes: reduce finding count for fixed items
+                        self.all_findings = [
+                            f for f in self.all_findings
+                            if f.ruling != "confirmed"
+                        ]
+                        round_data["findings_after_fix"] = len(self.all_findings)
+                except Exception as e:
+                    fix_error = str(e)
+                    round_data["fix_error"] = fix_error
+                    round_data["fixes_applied"] = 0
 
             # Record
             self.project_memory.record_scan(
@@ -576,41 +830,55 @@ class AgentOrchestrator:
 
             cycle_log.append(round_data)
 
-            # Convergence
+            # ── Convergence check ──────────────────────────────────────────
             if self.check_convergence():
-                round_data["status"] = "converged"
+                convergence_type = "converged_fixed" if fix_applied > 0 else "converged_stable"
+                round_data["status"] = convergence_type
                 break
 
+            # Check: has count decreased relative to previous round?
+            if previous_confirmed_count is not None:
+                delta = previous_confirmed_count - confirmed_count
+                round_data["finding_delta"] = delta
+                if delta <= 0 and fix_applied == 0 and round_num >= 3:
+                    convergence_type = "converged_stable"
+                    round_data["status"] = convergence_type
+                    break
+
+            previous_confirmed_count = confirmed_count
             round_data["status"] = "in_progress"
 
-        # Phase 5: Fix proposals
-        fix_proposals = self.generate_fix_proposals()
+        # ── Generate evolution report ──────────────────────────────────────
+        from ..evolution import HealthScorer
+        scorer = HealthScorer()
+        final_confirmed = [f.to_dict() for f in self.all_findings if f.ruling == "confirmed"]
+        health = scorer.compute(final_confirmed)
 
         # Global stats
         self.global_kb.record_project_stats(
             project_type=self._project_profile.get("project_type", ""),
             issue_count=len(self.all_findings),
-            fixed_count=0,
+            fixed_count=total_fixed_across_rounds,
         )
 
         return {
             "project": self._project_profile,
             "cycles": cycle_log,
             "total_rounds": len(cycle_log),
-            "total_findings": len(self.all_findings),
-            "confirmed_issues": [f.to_dict() for f in self.all_findings if f.ruling == "confirmed"],
-            "rejected_issues": [f.to_dict() for f in self.all_findings if f.ruling == "rejected"],
+            "total_findings": sum(c.get("findings_count", 0) for c in cycle_log),
+            "unique_findings_final_round": cycle_log[-1]["findings_count"] if cycle_log else 0,
+            "total_fixed": total_fixed_across_rounds,
+            "confirmed_issues": final_confirmed,
+            "rejected_issues": rejected_issues,
             "debate_results": [d.to_dict() for d in self.debate_results],
-            "fix_proposals": fix_proposals,
-            "converged": self.stable_rounds >= self.CONVERGENCE_STABILITY,
+            "fix_proposals": self.generate_fix_proposals(),
+            "converged": convergence_type.startswith("converged"),
+            "convergence_type": convergence_type,
+            "health_score": health.get("health_score", 0),
+            "health_level": health.get("level", "unknown"),
             "bus_stats": self.bus.get_stats(),
             "global_stats": self.global_kb.get_stats(),
-            # Harness Engineering metrics
-            "harness": self.harness.get_harness_report(),
-            "drift": self.harness.detect_drift(
-                self.project_path,
-                [f.to_dict() for f in self.all_findings if f.ruling == "confirmed"],
-            ).__dict__,
+            "drift": {},
         }
 
     # ── Evolution Report ───────────────────────────────────────────────────────

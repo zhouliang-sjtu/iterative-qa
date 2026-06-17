@@ -82,13 +82,10 @@ article/
 # Trae IDE skills (local only)
 .trae/
 
-# Research engine data (local experiments, IP-sensitive)
-article/research_engine/research_data/
-article/research_engine/comparison_output/
+# Research engine output (protected)
 *.db
 *.experiment.json
 *.comparison.json
 *_findings.json
 experiment_output/
 comparison_output/
-!article/research_engine/research_data/.gitkeep

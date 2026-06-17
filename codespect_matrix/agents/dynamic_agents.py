@@ -16,6 +16,7 @@ import socket
 import urllib.request
 import urllib.error
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
+from pathlib import Path
 from .base import BaseAgent, AgentRole, Finding, AgentMessage, MessageType
 
 if TYPE_CHECKING:
@@ -1147,6 +1148,132 @@ class SmokeTestAgent(BaseAgent):
         return None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# RuntimeDebugAgent — Scientific Debugging (inspired by Trae Debugger)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class RuntimeDebugAgent(BaseAgent):
+    """Scientific hypothesis-driven runtime analysis agent.
+
+    Inspired by Trae Debugger's "hypothesis → instrument → reproduce →
+    analyze → fix" workflow. Applies the same scientific method to code
+    review findings to verify their real-world impact.
+
+    STRATEGY (per finding):
+    1. Hypothesis: "This finding is exploitable/impactful because..."
+    2. Instrument: Insert assertion/log probes near the finding location
+    3. Analyze: If probes are on code paths, confirm the risk
+    4. Report: Validated finding with runtime evidence or downgrade
+
+    This agent operates STATICALLY — it analyzes code paths to estimate
+    whether a finding lies on a reachable execution path, without
+    actually running the code.
+
+    Detection capabilities:
+    - Reachability analysis: is reported code on a live execution path?
+    - Dead code detection: is the vulnerable code in unreachable branches?
+    - Severity calibration: downgrade findings on code with no runtime risk
+    - Assertion generation: suggest runtime validation probes
+    """
+
+    name = "runtime_debug"
+    role = AgentRole.INSPECTOR
+
+    def __init__(self, agent_id: str = None, bus: "AgentCommunicationBus" = None,
+                 memory: "ProjectMemory" = None, name: str = None):
+        agent_name = name or agent_id or self.name
+        super().__init__(name=agent_name, role=self.role, bus=bus)
+        self.memory = memory
+
+    def get_description(self) -> str:
+        return ("Scientific debugging agent: hypothesis-driven reachability "
+                "analysis and severity calibration for reported findings.")
+
+    def get_domain(self) -> str:
+        return "runtime_verification"
+
+    def inspect(self, files_context: str) -> List[Finding]:
+        """Analyze reported findings for runtime reachability."""
+        findings = []
+        import re as _re
+
+        func_defs = _re.findall(
+            r'=== FILE: (.+?) ===.*?def (\w+)\(', files_context, _re.DOTALL
+        )
+        func_calls = _re.findall(r'(\w+)\(', files_context)
+
+        for file_path, func_name in func_defs:
+            if func_name in ('__init__', '__str__', '__repr__', 'main',
+                           'get', 'post', 'put', 'delete'):
+                continue
+            if func_name not in set(func_calls):
+                findings.append(Finding(
+                    check_name="runtime_unreachable",
+                    severity="low",
+                    message=f"Function '{func_name}' defined but never called",
+                    file_path=file_path, line_start=0, line_end=0,
+                    evidence=f"def {func_name}(",
+                    remediation="Verify if unused. Remove dead code to reduce attack surface.",
+                    confidence=0.75,
+                ))
+        return findings
+
+    def analyze_reachability(self, finding: Finding,
+                             all_findings: List[Finding]) -> Dict:
+        """Hypothesis-driven reachability analysis."""
+        if finding.severity in ("critical", "high"):
+            has_callers = any(
+                f.file_path != finding.file_path
+                for f in all_findings
+                if finding.file_path and f.file_path
+                and Path(finding.file_path).name in (f.evidence or "")
+            )
+            if not has_callers:
+                return {"reachable": False, "confidence": 0.65,
+                        "hypothesis": "High-severity finding may be in unreachable code",
+                        "recommended_action": "downgrade_severity"}
+        return {"reachable": True, "confidence": 0.85,
+                "hypothesis": "Code path appears reachable",
+                "recommended_action": "confirm"}
+
+    def generate_assertion_probe(self, finding: Finding) -> str:
+        """Generate runtime assertion probes."""
+        probes = {
+            "sql_injection": (
+                "# RUNTIME PROBE: Verify parameterized query usage\n"
+                "assert isinstance(query_params, (tuple, dict))"
+            ),
+            "phi_leak": (
+                "# RUNTIME PROBE: Verify PHI not exposed in logs\n"
+                "assert 'patient' not in str(log_message).lower()"
+            ),
+            "hardcoded_secret": (
+                "# RUNTIME PROBE: Verify no hardcoded secrets\n"
+                "assert not secret_value.startswith(('sk-','AKIA','ghp_'))"
+            ),
+            "insecure_crypto": (
+                "# RUNTIME PROBE: Verify crypto uses secure algorithms\n"
+                "assert hash_algorithm not in ('md5','sha1')"
+            ),
+        }
+        for key, probe in probes.items():
+            if key in finding.check_name.lower():
+                return probe
+        return f"# RUNTIME PROBE for {finding.check_name}\n# {finding.message[:80]}"
+
+    def review(self, finding: Finding) -> Dict:
+        comment = ""
+        if finding.confidence < 0.5:
+            comment = "[RUNTIME] Low-confidence — may be false positive in dead code"
+        return {"verdict": "confirmed", "comment": comment}
+
+    def generate_fix(self, finding: Finding) -> Optional[Dict]:
+        probe = self.generate_assertion_probe(finding)
+        return {"type": "add_assertion_probe", "file_path": finding.file_path,
+                "line_start": finding.line_start, "suggestion": probe,
+                "can_auto_fix": False, "confidence": 0.7}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Agent Registration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1156,6 +1283,7 @@ DYNAMIC_AGENT_CLASSES = {
     "db_schema": DBSchemaAgent,
     "api_contract": APIContractAgent,
     "smoke_test": SmokeTestAgent,
+    "runtime_debug": RuntimeDebugAgent,
 }
 
 __all__ = [
@@ -1163,5 +1291,9 @@ __all__ = [
     "DBSchemaAgent", 
     "APIContractAgent",
     "SmokeTestAgent",
+    "RuntimeDebugAgent",
     "DYNAMIC_AGENT_CLASSES",
 ]
+
+
+# ── end of file ──

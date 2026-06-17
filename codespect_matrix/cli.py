@@ -101,6 +101,11 @@ examples:
         action="store_true",
         help="execute all fixes including high-risk ones (with --fix-execute)"
     )
+    parser.add_argument(
+        "--rollback",
+        action="store_true",
+        help="rollback all applied fixes to original state"
+    )
     
     args = parser.parse_args()
     
@@ -120,6 +125,10 @@ examples:
             return
         
         # ── AI fix ──
+        if args.rollback:
+            _run_rollback(args)
+            return
+
         if args.fix_plan:
             _run_fix_plan(args)
             return
@@ -504,6 +513,36 @@ def _run_evolve(args, save_baseline: bool = False):
 # ══════════════════════════════════════════════
 # AI autonomous fix
 # ══════════════════════════════════════════════
+
+def _run_rollback(args):
+    """Rollback all applied fixes to original state."""
+    from codespect_matrix.fix_engine import FixEngine
+
+    print(f"{'='*60}")
+    print("  codespect-matrix — Rollback Applied Fixes")
+    print(f"{'='*60}")
+
+    engine = FixEngine(args.path)
+    backups = engine.list_backups()
+    if backups["total_backups"] == 0:
+        print("\n  No backups found — nothing to rollback.")
+        return
+
+    print(f"\n  Found {backups['total_backups']} backups across {backups['total_files']} files:")
+    for rel, entries in backups["files"].items():
+        latest = entries[-1]["timestamp"] if entries else "unknown"
+        print(f"    {rel}  ({len(entries)} backup(s), latest: {latest})")
+
+    result = engine.rollback_all()
+    print(f"\n  Rollback results:")
+    print(f"    Rolled back: {len(result['rolled_back'])}")
+    print(f"    Failed:      {len(result['failed'])}")
+    print(f"    Unchanged:   {len(result['unchanged'])}")
+
+    if result.get("error"):
+        print(f"    Error: {result['error']}")
+    elif result["rolled_back"]:
+        print(f"\n  All fixes reverted. Backups preserved in .codespect_matrix_backups/")
 
 def _run_fix_plan(args):
     """AI fix — step 1: scan project and generate a fix plan.
