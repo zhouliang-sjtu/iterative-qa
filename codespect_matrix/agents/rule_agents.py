@@ -99,36 +99,20 @@ class SecurityAgent(BaseAgent, RuleAgentMixin):
         return "security"
 
     def inspect(self, files_context: str) -> List[Finding]:
-        SecurityExpert = _load_rule_expert()[0]
-        if SecurityExpert is None:
-            return self._llm_inspect(files_context, "security")
-        findings = self._rule_scan(SecurityExpert, self.project_profile)
-
-        # LLM deep analysis for critical/high findings
-        if self.llm and findings:
-            for f in findings:
-                if f.severity in ("critical", "high"):
-                    try:
-                        prompt = f"""As a security expert, review this finding:
-Check: {f.check_name}
-Severity: {f.severity}
-Description: {f.message}
-Suggested fix: {f.remediation}
-
-Evaluate:
-1. Is this a real vulnerability or false positive?
-2. If real, what is the attack scenario?
-3. What is the most effective fix?
-
-Return brief conclusion only."""
-                        analysis = self.llm.generate(
-                            prompt, temperature=DEFAULT_ANALYSIS_TEMPERATURE,
-                            max_tokens=300,
-                        )
-                        f.evidence = analysis
-                        f.confidence = 0.98
-                    except Exception:
-                        pass
+        # Use deterministic healthcare rule engine for security rules
+        all_rule_findings = _scan_with_healthcare_rules(files_context)
+        security_check_prefixes = (
+            'sql_injection', 'unsafe_', 'hardcoded_', 'aws_credentials',
+            'os_system', 'shell_true', 'eval_usage', 'exec_usage',
+            'path_traversal', 'weak_hash', 'ssl_verify',
+            'insecure_cipher', 'unvalidated_',
+            'xss_', 'xxe_', 'ssrf_', 'ldap_', 'ssti_',
+            'weak_random', 'insecure_temp', 'insecure_deserialization',
+            'error_suppression', 'timeout_missing', 'resource_leak',
+            'race_condition', 'magic_number', 'float_equality',
+        )
+        findings = [f for f in all_rule_findings
+                    if any(f.check_name.startswith(p) for p in security_check_prefixes)]
         return findings
 
     def review(self, finding: Finding) -> Dict[str, Any]:

@@ -41,7 +41,7 @@ Usage:
     result = orch.run_full_cycle()
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 __author__ = "周良"
 __organization__ = "上海交通大学医学院"
 

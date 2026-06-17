@@ -48,7 +48,7 @@ class LLMService:
             "anthropic": os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
             "google": os.getenv("GOOGLE_MODEL", "gemini-pro"),
             "baidu": os.getenv("BAIDU_MODEL", "ERNIE-Bot-4.0"),
-            "tongyi": os.getenv("TONGYI_MODEL", "qwen-plus"),
+            "tongyi": os.getenv("TONGYI_MODEL", "qwen-coder-plus"),
             "zhipu": os.getenv("ZHIPU_MODEL", "glm-4"),
             "huggingface": os.getenv("HUGGINGFACE_MODEL", "mistralai/Mistral-7B-v0.3"),
         }
@@ -79,6 +79,8 @@ class LLMService:
                 return ChatCompletion
             
             elif self.provider == "tongyi":
+                import dashscope
+                dashscope.api_key = self.api_key
                 from dashscope import Generation
                 return Generation
             
@@ -147,13 +149,16 @@ class LLMService:
                 return response.get("result", {}).get("content", "")
             
             elif self.provider == "tongyi":
-                response = self.model.call(
+                response = self.client.call(
                     model=self.model,
-                    input=prompt,
+                    messages=[{"role": "user", "content": prompt}],
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-                return response.output.text
+                if response.status_code == 200:
+                    return response.output.text
+                else:
+                    raise Exception(f"DashScope error: code={response.status_code}, msg={response.message}")
             
             elif self.provider == "zhipu":
                 response = self.client.chat.completions.create(

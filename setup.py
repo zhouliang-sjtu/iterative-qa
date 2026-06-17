@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="codespect-matrix",
-    version="2.0.0",
+    version="3.0.0",
     author="周良",
     author_email="zhouliang@shsmu.edu.cn",
     description="codespect-matrix — 16-Agent Code Evolution Platform · QA Self-Evolving · Debate Review · Hybrid Engine · Health Scoring",

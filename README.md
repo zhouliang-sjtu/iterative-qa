@@ -2,11 +2,11 @@
   <h1 align="center">codespect-matrix</h1>
   <p align="center"><strong>Multi-Agent Code Evolution Platform with Deep Taint Analysis</strong></p>
   <p align="center">
-    <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version">
+    <img src="https://img.shields.io/badge/version-3.0.0-blue" alt="Version">
     <img src="https://img.shields.io/badge/python-3.10+-green" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="License">
     <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Status">
-    <img src="https://img.shields.io/badge/agents-20+-orange" alt="Agents">
+    <img src="https://img.shields.io/badge/agents-24-orange" alt="Agents">
     <img src="https://img.shields.io/badge/tests-112%20passed-success" alt="Tests">
     <img src="https://img.shields.io/badge/coverage-59%25-yellow" alt="Coverage">
   </p>
@@ -22,7 +22,7 @@
 
 ## What is codespect-matrix?
 
-> Not just another linter. **codespect-matrix** is a virtual QA team — 20+ specialized AI agents that conduct **debate-style code review** across a **10-stage pipeline**, cross-validate every finding through a **Harness verification engine**, and perform **deep taint analysis** via Code Property Graph to track vulnerabilities across function boundaries.
+> Not just another linter. **codespect-matrix** is a virtual QA team — 24 specialized AI agents that conduct **debate-style code review** across a **10-stage pipeline**, cross-validate every finding through a **Harness verification engine**, and perform **deep taint analysis** via Code Property Graph to track vulnerabilities across function boundaries.
 
 ---
 
@@ -30,7 +30,7 @@
 
 | Traditional QA | codespect-matrix |
 |---|---|
-| Single-dimension (linter / coverage) | 20+ agents in joint debate review |
+| Single-dimension (linter / coverage) | 24 agents in joint debate review |
 | Rigid rules, heavy config | AI agents auto-adapt to project characteristics |
 | Surface-level pattern matching | **CPG Deep Taint Analysis** — AST + Call Graph + Data Flow tracking |
 | No runtime awareness | **Dynamic Analysis** — DB schema, API contract, smoke testing |
@@ -103,7 +103,7 @@ The **Code Property Graph** pre-scan elevates codespect-matrix from pattern matc
 
 **Detected vulnerability chains**: SQL injection (user_input → execute), PHI leaks (patient_data → log/output), path traversal (user_input → open()), cross-function attack vectors.
 
-### Agent Roster (20+ agents)
+### Agent Roster (24 agents)
 
 | Agent | Engine | Focus |
 |---|---|---|
@@ -184,7 +184,7 @@ Over time, the tool gets more accurate: fewer false positives, faster fix sugges
 
 ## LLM Support
 
-7 provider adapters. Falls back to rule-only mode when no LLM is configured:
+Adapter-based LLM integration. Falls back to rule-only mode when no LLM is configured:
 
 | Provider | Config |
 |---|---|
