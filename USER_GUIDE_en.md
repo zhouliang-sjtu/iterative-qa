@@ -1,7 +1,7 @@
 # codespect-matrix User Guide
 
-> **Version**: 1.0.0 | **Last Updated**: 2026-06-16  
-> Multi-Agent Code Evolution Platform — 16 AI Agents · Debate Review · Hybrid Engine · Health Scoring · Auto-Fix
+> **Version**: 3.0.0 | **Last Updated**: 2026-06-17  
+> Multi-Agent Code Evolution Platform — 24 AI Agents · Debate Review · Hybrid Engine · Health Scoring · Auto-Fix
 
 ---
 
@@ -36,7 +36,7 @@
    - [8.1 Dual Memory System](#81-dual-memory-system)
    - [8.2 Self-Evolution Engine Explained](#82-self-evolution-engine-explained)
    - [8.3 Healthcare Specialties](#83-healthcare-specialties)
-   - [8.4 16 Agent Roles](#84-16-agent-roles)
+   - [8.4 24 Agent Roles](#84-24-agent-roles)
    - [8.5 Severity Levels & Weights](#85-severity-levels--weights)
 9. [Configuration File Reference](#9-configuration-file-reference)
 10. [FAQ](#10-faq)
@@ -45,13 +45,13 @@
 
 ## 1. Introduction
 
-**codespect-matrix** is not just another linter. It is a **virtual QA team** — 16 specialized AI agents that conduct **debate-style code review**, cross-validate every finding, converge on a final verdict, and track code health trends over time. It learns across projects and gets smarter with every scan.
+**codespect-matrix** is not just another linter. It is a **virtual QA team** — 24 specialized AI agents that conduct **debate-style code review**, cross-validate every finding, converge on a final verdict, and track code health trends over time. It learns across projects and gets smarter with every scan.
 
 ### Core Capabilities
 
 | Capability | Description |
 |------------|------------|
-| Debate Review | 16 agents inspect in parallel → cross-domain review → disputed findings enter debate → Orchestrator ruling |
+| Debate Review | 24 agents inspect in parallel → cross-domain review → disputed findings enter debate → Orchestrator ruling |
 | Hybrid Engine | Security/healthcare/PHI/compliance use rule+LLM dual engine; others use pure LLM reasoning |
 | Dual Memory | Project-level memory (false positive filtering) + Global knowledge base (cross-project learning) |
 | Code Evolution | Health scoring · Technical debt · Architecture analysis · Test coverage · Improvement roadmap |
@@ -63,7 +63,7 @@
 
 | Traditional QA | codespect-matrix |
 |---------------|------------------|
-| Single-dimension (linter / coverage) | 16 agents in joint debate review |
+| Single-dimension (linter / coverage) | 24 agents in joint debate review |
 | Rigid rules, heavy config | AI agents auto-adapt to project characteristics |
 | Reports issues without fixes | Every issue includes remediation + auto-fix plan |
 | One-and-done scan | **Convergence loop** — repeats until no new findings |
@@ -343,7 +343,7 @@ codespect-matrix --json --output report.json
 
 ```
 ======================================================================
-  codespect-matrix — 16-Agent Code Evolution Platform
+  codespect-matrix — 24-Agent Code Evolution Platform
   Review · Debate · Converge · Evolve
 ======================================================================
 
@@ -1049,7 +1049,7 @@ These are executed by dedicated agents:
 - **MedicalDataAgent** (`medical_data`): Medical data format and range validation
 - **ComplianceAgent** (`compliance`): License compliance, GDPR audit
 
-### 8.4 16 Agent Roles
+### 8.4 24 Agent Roles
 
 | Agent ID | Name | Engine Type | Focus Area |
 |----------|------|-------------|------------|

@@ -288,6 +288,53 @@ GENERAL_SECURITY_RULES = [
         'severity': 'critical',
         'remediation': 'Enable SSL verification. Only disable for testing with trusted networks.',
     },
+    # Insecure Cipher Modes
+    {
+        'check': 'insecure_cipher_ecb',
+        'pattern': r'MODE_ECB',
+        'message': 'AES/Block cipher in ECB mode — patterns exposed, not IND-CPA secure',
+        'severity': 'critical',
+        'remediation': 'Use AES-GCM or AES-CBC with proper IV. Never use ECB mode for any data.',
+    },
+    {
+        'check': 'insecure_cipher_rc4',
+        'pattern': r'(?:ARC4|RC4|arc4|rc4)',
+        'message': 'RC4 cipher detected — known broken, must not be used',
+        'severity': 'critical',
+        'remediation': 'Replace RC4 with AES-GCM. RC4 has been broken since 2013.',
+    },
+    {
+        'check': 'insecure_cipher_des',
+        'pattern': r'\bDES\b(?!\.\s*MODE)',
+        'message': 'DES cipher detected — key size too small (56-bit), considered broken',
+        'severity': 'critical',
+        'remediation': 'Replace DES with AES-256. DES can be brute-forced in hours.',
+    },
+    # Input Validation
+    {
+        'check': 'unvalidated_web_input',
+        'pattern': r'request\.(?:args|form|json|data)\.(?:get|post|fetch)\s*\(',
+        'negative_pattern': r'try\s*:|except\s+|validate|isinstance|is_valid|is_none\s*and|sanitize|whitelist|allowed',
+        'message': 'Web request input used without validation or try/except',
+        'severity': 'high',
+        'remediation': 'Validate all user input: type check, range check, allowlist. Use marshmallow/pydantic for schema validation.',
+    },
+    {
+        'check': 'unvalidated_type_cast_medical',
+        'pattern': r'(?:int|float)\s*\(.*request\.(?:args|form|json)',
+        'negative_pattern': r'try\s*:|except\s+(?:ValueError|TypeError)',
+        'message': 'Medical value parsed from request without ValueError handling',
+        'severity': 'high',
+        'remediation': 'Wrap type conversions from user input in try/except ValueError. Never trust input type.',
+    },
+    {
+        'check': 'unvalidated_request_data_use',
+        'pattern': r'request\.(?:json|data|args|form)(?!\s*\.[gs]et\s*\()',
+        'negative_pattern': r'try\s*:|except\s+|validate|schema|openapi|swagger|marshmallow|pydantic|isinstance',
+        'message': 'request data accessed without validation (raw access, no .get safety)',
+        'severity': 'medium',
+        'remediation': 'Always validate request data with pydantic/marshmallow schema before use. Never access raw request body directly.',
+    },
 ]
 
 # ═══════════════════════════════════════════════════════════════════════════════

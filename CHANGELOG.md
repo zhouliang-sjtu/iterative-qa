@@ -5,6 +5,23 @@ All notable changes to codespect-matrix will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-06-17
+
+### Changed
+- **All-in Architecture**: Removed agent scoring/selective activation (`_select_agents()`). All 24 agents now run unconditionally, leveraging the full rule engine + LLM agent + CPG taint analysis suite in every scan.
+- **LinterAgent**: Direct Ruff JSON parsing replaces LLM-interpreted text output. All 283 Ruff rules are now absorbed into codespect findings with proper severity mapping (S→critical, E→high, W→medium). Removes ~15s LLM overhead per lint run.
+- **SecurityAgent**: Deterministic healthcare rule engine scan replaces LLM-only fallback. Zero-miss detection for SQL injection, weak crypto, PHI leaks, and unvalidated input patterns.
+- **Healthcare Rules**: +5 new security rules — insecure_cipher_ecb, insecure_cipher_rc4, insecure_cipher_des, unvalidated_web_input, unvalidated_type_cast_medical. Total: 104 deterministic rules.
+- **LLM Service**: Default model upgraded from qwen-plus to qwen-coder-plus. Added explicit `dashscope.api_key` initialization.
+- **Context Size**: Agent context limit expanded from 30KB to 200KB to prevent file truncation during large project scans.
+- **Subprocess Compatibility**: All linter subprocess calls unified to `sys.executable -m` for Windows compatibility.
+- **Version**: 2.0.0 → 3.0.0
+
+### Fixed
+- LinterAgent: `fix_info = diag.get("fix") or {}` guards against `NoneType` crash when Ruff fix field is null
+- LinterAgent: `encoding="utf-8", errors="replace"` on Ruff subprocess to prevent GBK decode errors on Windows
+- LinterAgent: `_run_mypy` changed from bare `mypy` command to `sys.executable -m mypy`
+
 ## [2.0.0] - 2026-06-17
 
 ### Added

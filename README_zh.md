@@ -4,7 +4,7 @@
 
 ## 关于本项目
 
-**codespect-matrix** 是一个基于大模型的**多智能体代码进化平台**。20+ 位专业 AI Agent 通过 **10 阶段管道** 进行**辩论式审查**，经 **CPG 深度污点分析** 追踪跨函数漏洞链，并经由 **Harness 验证引擎** 确保审查质量。
+**codespect-matrix** 是一个基于大模型的**多智能体代码进化平台**。24 位专业 AI Agent 通过 **10 阶段管道** 进行**辩论式审查**，全量并行激活（all-in），经 **CPG 深度污点分析** 追踪跨函数漏洞链，并经由 **Harness 验证引擎** 确保审查质量。
 
 ### 快速开始
 
@@ -35,7 +35,7 @@ codespect-matrix --max-rounds 10 --output report.md
 - **CPG 深度污点分析**：AST + 调用图 + 数据流图 + 污点追踪，纯 Python 实现，零外部依赖
 - **10 阶段管道**：CPG预扫描 → Agent选择 → 并行审查 → Harness验证 → 交叉评审 → Harness复核 → 辩论裁决 → 收敛检测 → 漂移检测 → 修复生成 → 演进报告
 - **Harness 验证引擎**：约束执行、跨阶段验证、反馈路由、自动恢复、质量漂移检测
-- **20+ 个专业 Agent**：安全/医疗/PHI/FHIR/DICOM/HL7/CDS/合规 + 13个LLM推理Agent + 4个动态分析Agent
+- **24 个专业 Agent**：9个规则+LLM混合Agent（安全/医疗/PHI/FHIR/DICOM/HL7/CDS/合规/医学数据）+ 11个LLM推理Agent + 4个动态分析Agent，全量并行
 - **动态分析 Agent**：数据库兼容性、ORM Schema 一致性、API 契约、端点冒烟测试，按需自动激活
 - **混合引擎**：CPG污点分析 + 规则引擎 + LLM推理，三引擎融合
 - **双记忆系统**：项目级记忆 + 全局知识库，跨项目经验积累
@@ -71,7 +71,7 @@ codespect-matrix --max-rounds 10 --output report.md
 
 **可检测的漏洞链**：SQL注入（用户输入→execute）、PHI泄露（患者数据→日志/输出）、路径穿越（用户输入→open()）、跨函数攻击向量。
 
-### Agent 阵容（20+ 个 Agent）
+### Agent 阵容（24 个 Agent）
 
 | Agent | 引擎 | 职责 |
 |---|---|---|

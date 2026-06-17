@@ -7,6 +7,7 @@ Selected at runtime by Orchestrator based on project profile.
 from __future__ import annotations
 
 import os
+import sys
 import json
 import subprocess
 from typing import Dict, List, Any
@@ -269,35 +270,49 @@ class LinterAgent(BaseAgent):
     def _run_mypy(self, project_path: str) -> str:
         try:
             result = subprocess.run(
-                ["mypy", project_path, "--ignore-missing-imports"],
+                [sys.executable, "-m", "mypy", project_path, "--ignore-missing-imports"],
                 capture_output=True, text=True, timeout=120,
             )
             return result.stdout.strip() or "No mypy issues found."
         except Exception:
             return ""
 
+    def _run_ruff_json(self, project_path: str) -> List[dict]:
+        """Run ruff check with JSON output for direct structured parsing."""
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "ruff", "check", project_path,
+                 "--output-format", "json"],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=60,
+            )
+            if result.stdout.strip():
+                return json.loads(result.stdout)
+        except Exception:
+            pass
+        return []
+
     def inspect(self, files_context: str) -> List[Finding]:
         findings = []
 
-        # 1. Ruff scan
-        ruff_output = self._run_ruff(self.project_path)
-        if ruff_output and self.llm:
-            prompt = f"""[RUFF OUTPUT]
-{ruff_output[:4000]}
+        # 1. Ruff scan — direct JSON parse, no LLM needed
+        ruff_diagnostics = self._run_ruff_json(self.project_path)
+        for diag in ruff_diagnostics:
+            loc = diag.get("location", {})
+            fix_info = diag.get("fix") or {}
+            findings.append(Finding(
+                check_name=f"linter_ruff_{diag.get('code', 'unknown')}",
+                severity=self._ruff_severity(diag),
+                message=diag.get("message", ""),
+                file_path=diag.get("filename", ""),
+                line_start=loc.get("row", 0),
+                line_end=loc.get("end_row", loc.get("row", 0)),
+                evidence="",
+                remediation=fix_info.get("message", "Fix as suggested by Ruff"),
+                confidence=0.95,
+            ))
 
-Interpret the ruff output. For each finding output:
-{{"check_name":"linter_ruff_xxx", "severity":"...", "message":"..."}}
-Return JSON array only."""
-            try:
-                result = self.llm.generate(prompt, temperature=0.2, max_tokens=2000)
-                start, end = result.find("["), result.rfind("]") + 1
-                if start != -1 and end != 0:
-                    for item in json.loads(result[start:end]):
-                        findings.append(Finding(**item, confidence=0.9))
-            except Exception:
-                pass
-
-        # 2. Mypy scan
+        # 2. Mypy scan — keep LLM interpretation for complex type errors
         mypy_output = self._run_mypy(self.project_path)
         if mypy_output and self.llm:
             prompt = f"""[MYPY OUTPUT]
@@ -316,6 +331,24 @@ Return JSON array only."""
                 pass
 
         return findings
+
+    @staticmethod
+    def _ruff_severity(diag: dict) -> str:
+        """Map Ruff diagnostic to codespect severity."""
+        code = diag.get("code", "")
+        if not code:
+            return "medium"
+        # Security rules → critical
+        if code.startswith("S"): return "critical"
+        # Error rules → high
+        if code.startswith("E"): return "high"
+        # Warning → medium
+        if code.startswith("W"): return "medium"
+        # Formatting → low
+        if code.startswith("F"): return "low"
+        # Naming → low
+        if code.startswith("N"): return "low"
+        return "medium"
 
 
 # ─────────────────────────────────────────────
